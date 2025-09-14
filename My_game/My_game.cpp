@@ -1,4 +1,4 @@
-﻿#include "raylib.h"
+#include "raylib.h"
 
 const int screenWidth = 800;
 const int screenHeight = 450;
@@ -41,12 +41,6 @@ int main(void)
     Texture2D texture = LoadTextureFromImage(image);
     UnloadImage(image);
 
-    Image image2 = LoadImage("dog.png");
-    ImageResize(&image2, 132, 114);
-    Texture2D texture2 = LoadTextureFromImage(image2);
-    UnloadImage(image2);
-   
-
     Rectangle rec = { screenWidth / 2 - 50, screenHeight / 2 - 50,100,100 };
     Rectangle rec2 = { screenWidth / 4 - 50, screenHeight / 4 - 50,100,100 };
     while (!WindowShouldClose())
@@ -60,17 +54,15 @@ int main(void)
 
         DrawRectangleRec(rec, BLUE);
         DrawRectangleRec(rec2, RED);
-
         DrawText("Bob", rec.x, rec.y, 20, BLACK);
         DrawTexture(texture, rec.x, rec.y, WHITE);
-        
+
         DrawText("John", rec2.x, rec2.y, 20, BLACK);
-        DrawTexture(texture2, rec2.x, rec2.y, WHITE);
         EndDrawing();
 
     }
     UnloadTexture(texture);
-    UnloadTexture(texture2);
+
     CloseWindow();
 
     return 0;
