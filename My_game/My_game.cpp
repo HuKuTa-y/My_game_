@@ -1,5 +1,5 @@
 
-#include "raylib.h"
+/*#include "raylib.h"
 
 const int screenWidth = 1000;
 const int screenHeight = 600;
@@ -113,7 +113,7 @@ int main(void)
 
     return 0;
 }
-/*
+
 #include <iostream>
 #include "raylib.h"
 #include "raymath.h"
@@ -166,19 +166,19 @@ void StaticCollisionResolution(Circle& a, Circle& b) {
 void DynamicCollisionResolution(Circle& a, Circle& b) {
     Vector2 first = a.position;
     Vector2 second = b.position;
-    //оси столкновения - нормаль и касательная
+    //Г®Г±ГЁ Г±ГІГ®Г«ГЄГ­Г®ГўГҐГ­ГЁГї - Г­Г®Г°Г¬Г Г«Гј ГЁ ГЄГ Г±Г ГІГҐГ«ГјГ­Г Гї
     Vector2 dir = Vector2Subtract(second, first);
     Vector2 normal = Vector2Normalize(dir);
     Vector2 tangent = { -normal.y,normal.x };
-    //Проекции на оси столкновения
+    //ГЏГ°Г®ГҐГЄГ¶ГЁГЁ Г­Г  Г®Г±ГЁ Г±ГІГ®Г«ГЄГ­Г®ГўГҐГ­ГЁГї
     float dpNormA = Vector2DotProduct(a.velocity, normal);
     float dpNormB = Vector2DotProduct(b.velocity, normal);
     float dpTangA = Vector2DotProduct(a.velocity, tangent);
     float dpTangB = Vector2DotProduct(b.velocity, tangent);
-    //Сохранение импульса в 1мерном пространстве
+    //Г‘Г®ГµГ°Г Г­ГҐГ­ГЁГҐ ГЁГ¬ГЇГіГ«ГјГ±Г  Гў 1Г¬ГҐГ°Г­Г®Г¬ ГЇГ°Г®Г±ГІГ°Г Г­Г±ГІГўГҐ
     float p1 = (dpNormA * (a.weight - b.weight) + 2 * b.weight * dpNormB) / (a.weight + b.weight);
     float p2 = (dpNormB * (b.weight - a.weight) + 2 * a.weight * dpNormA) / (a.weight + b.weight);
-    //Применяем измененный импульс к скоростям кругов
+    //ГЏГ°ГЁГ¬ГҐГ­ГїГҐГ¬ ГЁГ§Г¬ГҐГ­ГҐГ­Г­Г»Г© ГЁГ¬ГЇГіГ«ГјГ± ГЄ Г±ГЄГ®Г°Г®Г±ГІГїГ¬ ГЄГ°ГіГЈГ®Гў
     a.velocity = Vector2Add(Vector2Scale(tangent, dpTangA), Vector2Scale(normal, p1));
     b.velocity = Vector2Add(Vector2Scale(tangent, dpTangB), Vector2Scale(normal, p2));
 }
