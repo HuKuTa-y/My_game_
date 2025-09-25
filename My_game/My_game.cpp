@@ -9,7 +9,6 @@ typedef struct {
     bool active;
 } Bullet;
 
-// Вынесем функцию SpawnBullet наружу
 void SpawnBullet(Bullet bullets[], Vector2 startPos, Vector2 targetPos, float bulletSpeed) {
     for (int i = 0; i < MAX_BULLETS; i++) {
         if (!bullets[i].active) {
@@ -34,13 +33,14 @@ int main(void) {
     const int screenWidth = 800;
     const int screenHeight = 600;
 
-    InitWindow(screenWidth, screenHeight, "Smooth movement and shooting");
+    InitWindow(screenWidth, screenHeight, "Rotation with A/D keys");
+    DisableCursor();
     SetTargetFPS(60);
 
     Rectangle player = {
         (float)screenWidth / 2 - 25,
         (float)screenHeight / 2 - 25,
-        50, 50
+        70, 50
     };
 
     Vector2 velocity = { 0.0f, 0.0f };
@@ -53,30 +53,39 @@ int main(void) {
         bullets[i].active = false;
     }
 
-    bool wasMouseDown = false;
+    float rotation = 0.0f; // угол игрока в градусах
+    const float rotationSpeed = 90.0f; // скорость вращения в градусах в секунду
 
     while (!WindowShouldClose()) {
         float deltaTime = GetFrameTime();
 
-        // Обработка ввода движения
-        Vector2 input = { 0, 0 };
-
-        if (IsKeyDown(KEY_W)) input.y -= 1;
-        if (IsKeyDown(KEY_S)) input.y += 1;
-        if (IsKeyDown(KEY_A)) input.x -= 1;
-        if (IsKeyDown(KEY_D)) input.x += 1;
-
-        // Нормализуем ввод, чтобы движение не было быстрее по диагонали
-        float inputLength = sqrtf(input.x * input.x + input.y * input.y);
-        if (inputLength > 0) {
-            input.x /= inputLength;
-            input.y /= inputLength;
+        // -- Обработка вращения --
+        if (IsKeyDown(KEY_A)) {
+            rotation -= rotationSpeed * deltaTime; // вращать налево
+        }
+        if (IsKeyDown(KEY_D)) {
+            rotation += rotationSpeed * deltaTime; // вращать направо
         }
 
-        // Ускорение + ограничение скорости
-        velocity.x += input.x * acceleration * deltaTime;
-        velocity.y += input.y * acceleration * deltaTime;
+        // -- Обработка движения вперёд и назад по rotation --
+        float radians = DEG2RAD * rotation;
 
+        if (IsKeyDown(KEY_W)) {
+            float dirX = cosf(radians);
+            float dirY = sinf(radians);
+            // Вперёд
+            velocity.x += dirX * acceleration * deltaTime;
+            velocity.y += dirY * acceleration * deltaTime;
+        }
+        if (IsKeyDown(KEY_S)) {
+            float dirX = cosf(radians);
+            float dirY = sinf(radians);
+            // Назад (обратное направление)
+            velocity.x -= dirX * acceleration * deltaTime;
+            velocity.y -= dirY * acceleration * deltaTime;
+        }
+
+        // Ограничение скорости
         float speed = sqrtf(velocity.x * velocity.x + velocity.y * velocity.y);
         if (speed > maxSpeed) {
             velocity.x = (velocity.x / speed) * maxSpeed;
@@ -87,15 +96,15 @@ int main(void) {
         velocity.x *= friction;
         velocity.y *= friction;
 
-        // Остановить при очень маленькой скорости
+        // Небольшое залипание скорости в 0 для избежания дрожания
         if (fabsf(velocity.x) < 0.5f) velocity.x = 0;
         if (fabsf(velocity.y) < 0.5f) velocity.y = 0;
 
-        // Обновление позиции игрока
+        // Обновляем позицию
         player.x += velocity.x * deltaTime;
         player.y += velocity.y * deltaTime;
 
-        // Ограничиваем игрока границами экрана
+        // Ограничение границ экрана
         if (player.x < 0) {
             player.x = 0;
             velocity.x = 0;
@@ -113,22 +122,22 @@ int main(void) {
             velocity.y = 0;
         }
 
-        // Обработка стрельбы по нажатию мыши (только при новом нажатии)
+        // -- Обработка стрельбы --
         bool mouseDown = IsMouseButtonDown(MOUSE_LEFT_BUTTON);
-        if (mouseDown && !wasMouseDown) {
+        static bool lastMouseDown = false;
+        if (mouseDown && !lastMouseDown) {
+            Vector2 center = { player.x + player.width / 2, player.y + player.height / 2 };
             Vector2 mousePos = GetMousePosition();
-            Vector2 startPos = { player.x + player.width / 2, player.y + player.height / 2 };
-            SpawnBullet(bullets, startPos, mousePos, 600.0f);
+            SpawnBullet(bullets, center, mousePos, 600.0f);
         }
-        wasMouseDown = mouseDown;
+        lastMouseDown = mouseDown;
 
-        // Обновление пуль
+        // Обновляем пули
         for (int i = 0; i < MAX_BULLETS; i++) {
             if (bullets[i].active) {
                 bullets[i].position.x += bullets[i].velocity.x * deltaTime;
                 bullets[i].position.y += bullets[i].velocity.y * deltaTime;
 
-                // Если пуля вышла за пределы экрана — деактивируем её
                 if (bullets[i].position.x < 0 || bullets[i].position.x > screenWidth ||
                     bullets[i].position.y < 0 || bullets[i].position.y > screenHeight) {
                     bullets[i].active = false;
@@ -136,11 +145,12 @@ int main(void) {
             }
         }
 
-        // Отрисовка
+        // --- Отрисовка ---
         BeginDrawing();
         ClearBackground(RAYWHITE);
 
-        DrawRectangleRec(player, BLUE);
+        Vector2 origin = { player.width / 2, player.height / 2 };
+        DrawRectanglePro(player, origin, rotation, BLUE);
         DrawRectangleLinesEx(player, 2, DARKBLUE);
 
         for (int i = 0; i < MAX_BULLETS; i++) {
@@ -149,9 +159,17 @@ int main(void) {
             }
         }
 
-        DrawText("Use WASD to move", 10, 10, 20, DARKGRAY);
-        DrawText("Click LEFT MOUSE BUTTON to shoot", 10, 40, 20, DARKGRAY);
+        DrawText("Use W to move forward", 10, 10, 20, DARKGRAY);
+        DrawText("Use S to move backward", 10, 40, 20, DARKGRAY);
+        DrawText("Use A/D to rotate", 10, 70, 20, DARKGRAY);
+        DrawText("Click LEFT MOUSE BUTTON to shoot", 10, 100, 20, DARKGRAY);
         DrawFPS(screenWidth - 90, 10);
+
+        // Рисуем прицел мышью
+        Vector2 mousePos = GetMousePosition();
+        int crosshairSize = 10;
+        DrawLine(mousePos.x - crosshairSize, mousePos.y, mousePos.x + crosshairSize, mousePos.y, BLACK);
+        DrawLine(mousePos.x, mousePos.y - crosshairSize, mousePos.x, mousePos.y + crosshairSize, BLACK);
 
         EndDrawing();
     }
