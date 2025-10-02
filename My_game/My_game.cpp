@@ -37,8 +37,6 @@ int main(void) {
         70, 40
     };
 
-    
-
     Vector2 velocity = { 0.0f, 0.0f };
     const float maxSpeed = 400.0f;
     const float acceleration = 1500.0f;
@@ -49,8 +47,8 @@ int main(void) {
         bullets[i].active = false;
     }
 
-    float rotation = 0.0f; // угол фигуры в градусах (по умолчанию смотрит вверх)
-    const float rotationSpeed = 90.0f; // скорость вращения в градусах в секунду
+    float rotation = 0.0f; // угол фигуры в градусах
+    const float rotationSpeed = 90.0f; // скорость вращения
 
     while (!WindowShouldClose()) {
         float deltaTime = GetFrameTime();
@@ -110,7 +108,7 @@ int main(void) {
         velocity.x *= friction;
         velocity.y *= friction;
 
-        // Минимальное значение скорости для избежания дрожания
+        // Минимальное значение скорости
         if (fabsf(velocity.x) < 0.5f) velocity.x = 0;
         if (fabsf(velocity.y) < 0.5f) velocity.y = 0;
 
@@ -118,28 +116,29 @@ int main(void) {
         player.x += velocity.x * deltaTime;
         player.y += velocity.y * deltaTime;
 
-        // Ограничение границ экрана
+        // Отталкивание от границ экрана
         if (player.x < 0) {
             player.x = 0;
-            velocity.x = 0;
+            velocity.x = -velocity.x; // отскакиваем
         }
-        if (player.y < 0) {
-            player.y = 0;
-            velocity.y = 0;
-        }
-        if (player.x + player.width > screenWidth) {
+        else if (player.x + player.width > screenWidth) {
             player.x = screenWidth - player.width;
-            velocity.x = 0;
-        }
-        if (player.y + player.height > screenHeight) {
-            player.y = screenHeight - player.height;
-            velocity.y = 0;
+            velocity.x = -velocity.x;
         }
 
-        // Стрельба
+        if (player.y < 0) {
+            player.y = 0;
+            velocity.y = -velocity.y;
+        }
+        else if (player.y + player.height > screenHeight) {
+            player.y = screenHeight - player.height;
+            velocity.y = -velocity.y;
+        }
+
+        // Стрельба из верхнего левого угла
         if (IsKeyPressed(KEY_ENTER)) {
-            Vector2 center = { player.x + player.width / 2, player.y + player.height / 2};
-            SpawnBullet(bullets, center, rotation, 600.0f);
+            Vector2 startPos = { player.x, player.y }; // верхний левый угол
+            SpawnBullet(bullets, startPos, rotation, 600.0f);
         }
 
         // Обновление пуль
@@ -154,28 +153,21 @@ int main(void) {
                 }
             }
         }
-        
+
         // --- Отрисовка ---
         BeginDrawing();
         ClearBackground(RAYWHITE);
 
-        // Точка вращения — центр фигуры
-        Vector2 origin = { player.width / 2, player.height / 2};
-  
-        // Рисуем фигуру с учетом rotation и origin
+        Vector2 origin = { player.width / 2, player.height / 2 };
         DrawRectanglePro(player, origin, rotation, BLUE);
         DrawRectangleLinesEx(player, 2, GRAY);
 
-       
-
-        // Рисуем пули
         for (int i = 0; i < MAX_BULLETS; i++) {
             if (bullets[i].active) {
                 DrawCircleV(bullets[i].position, 5, RED);
             }
         }
 
-        // Инструкции
         DrawText("Use W to move forward", 10, 10, 20, DARKGRAY);
         DrawText("Use S to move backward", 10, 40, 20, DARKGRAY);
         DrawText("Use A/D to rotate", 10, 70, 20, DARKGRAY);
