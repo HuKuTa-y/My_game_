@@ -9,21 +9,14 @@ typedef struct {
     bool active;
 } Bullet;
 
-void SpawnBullet(Bullet bullets[], Vector2 startPos, Vector2 targetPos, float bulletSpeed) {
+void SpawnBullet(Bullet bullets[], Vector2 startPos, float angleDeg, float bulletSpeed) {
     for (int i = 0; i < MAX_BULLETS; i++) {
         if (!bullets[i].active) {
             bullets[i].active = true;
             bullets[i].position = startPos;
-
-            Vector2 dir = { targetPos.x - startPos.x, targetPos.y - startPos.y };
-            float length = sqrtf(dir.x * dir.x + dir.y * dir.y);
-            if (length != 0) {
-                bullets[i].velocity.x = (dir.x / length) * bulletSpeed;
-                bullets[i].velocity.y = (dir.y / length) * bulletSpeed;
-            }
-            else {
-                bullets[i].velocity = Vector2{ 0, 0 };
-            }
+            float angleRad = DEG2RAD * angleDeg;
+            bullets[i].velocity.x = cosf(angleRad) * bulletSpeed;
+            bullets[i].velocity.y = sinf(angleRad) * bulletSpeed;
             break;
         }
     }
@@ -37,11 +30,14 @@ int main(void) {
     DisableCursor();
     SetTargetFPS(60);
 
+    // Начальные параметры фигуры
     Rectangle player = {
-        (float)screenWidth / 2 - 25,
+        (float)screenWidth / 2 - 35,
         (float)screenHeight / 2 - 25,
-        70, 50
+        70, 40
     };
+
+    
 
     Vector2 velocity = { 0.0f, 0.0f };
     const float maxSpeed = 400.0f;
@@ -53,36 +49,54 @@ int main(void) {
         bullets[i].active = false;
     }
 
-    float rotation = 0.0f; // угол игрока в градусах
+    float rotation = 0.0f; // угол фигуры в градусах (по умолчанию смотрит вверх)
     const float rotationSpeed = 90.0f; // скорость вращения в градусах в секунду
 
     while (!WindowShouldClose()) {
         float deltaTime = GetFrameTime();
 
-        // -- Обработка вращения --
-        if (IsKeyDown(KEY_A)) {
-            rotation -= rotationSpeed * deltaTime; // вращать налево
-        }
-        if (IsKeyDown(KEY_D)) {
-            rotation += rotationSpeed * deltaTime; // вращать направо
-        }
-
-        // -- Обработка движения вперёд и назад по rotation --
+        // Обновляем угол
         float radians = DEG2RAD * rotation;
 
-        if (IsKeyDown(KEY_W)) {
+        // Обработка вращения и движения
+        bool rotateLeft = IsKeyDown(KEY_A);
+        bool rotateRight = IsKeyDown(KEY_D);
+        bool moveForward = IsKeyDown(KEY_W);
+        bool moveBackward = IsKeyDown(KEY_S);
+
+        if (rotateLeft && moveBackward) {
+            rotation += rotationSpeed * deltaTime;
             float dirX = cosf(radians);
             float dirY = sinf(radians);
-            // Вперёд
-            velocity.x += dirX * acceleration * deltaTime;
-            velocity.y += dirY * acceleration * deltaTime;
-        }
-        if (IsKeyDown(KEY_S)) {
-            float dirX = cosf(radians);
-            float dirY = sinf(radians);
-            // Назад (обратное направление)
             velocity.x -= dirX * acceleration * deltaTime;
             velocity.y -= dirY * acceleration * deltaTime;
+        }
+        else if (rotateRight && moveBackward) {
+            rotation -= rotationSpeed * deltaTime;
+            float dirX = cosf(radians);
+            float dirY = sinf(radians);
+            velocity.x -= dirX * acceleration * deltaTime;
+            velocity.y -= dirY * acceleration * deltaTime;
+        }
+        else {
+            if (rotateLeft) {
+                rotation -= rotationSpeed * deltaTime;
+            }
+            if (rotateRight) {
+                rotation += rotationSpeed * deltaTime;
+            }
+            if (moveForward) {
+                float dirX = cosf(radians);
+                float dirY = sinf(radians);
+                velocity.x += dirX * acceleration * deltaTime;
+                velocity.y += dirY * acceleration * deltaTime;
+            }
+            if (moveBackward) {
+                float dirX = cosf(radians);
+                float dirY = sinf(radians);
+                velocity.x -= dirX * acceleration * deltaTime;
+                velocity.y -= dirY * acceleration * deltaTime;
+            }
         }
 
         // Ограничение скорости
@@ -96,7 +110,7 @@ int main(void) {
         velocity.x *= friction;
         velocity.y *= friction;
 
-        // Небольшое залипание скорости в 0 для избежания дрожания
+        // Минимальное значение скорости для избежания дрожания
         if (fabsf(velocity.x) < 0.5f) velocity.x = 0;
         if (fabsf(velocity.y) < 0.5f) velocity.y = 0;
 
@@ -122,17 +136,13 @@ int main(void) {
             velocity.y = 0;
         }
 
-        // -- Обработка стрельбы --
-        bool mouseDown = IsMouseButtonDown(MOUSE_LEFT_BUTTON);
-        static bool lastMouseDown = false;
-        if (mouseDown && !lastMouseDown) {
-            Vector2 center = { player.x + player.width / 2, player.y + player.height / 2 };
-            Vector2 mousePos = GetMousePosition();
-            SpawnBullet(bullets, center, mousePos, 600.0f);
+        // Стрельба
+        if (IsKeyPressed(KEY_ENTER)) {
+            Vector2 center = { player.x + player.width / 2, player.y + player.height / 2};
+            SpawnBullet(bullets, center, rotation, 600.0f);
         }
-        lastMouseDown = mouseDown;
 
-        // Обновляем пули
+        // Обновление пуль
         for (int i = 0; i < MAX_BULLETS; i++) {
             if (bullets[i].active) {
                 bullets[i].position.x += bullets[i].velocity.x * deltaTime;
@@ -144,32 +154,33 @@ int main(void) {
                 }
             }
         }
-
+        
         // --- Отрисовка ---
         BeginDrawing();
         ClearBackground(RAYWHITE);
 
-        Vector2 origin = { player.width / 2, player.height / 2 };
+        // Точка вращения — центр фигуры
+        Vector2 origin = { player.width / 2, player.height / 2};
+  
+        // Рисуем фигуру с учетом rotation и origin
         DrawRectanglePro(player, origin, rotation, BLUE);
-        DrawRectangleLinesEx(player, 2, DARKBLUE);
+        DrawRectangleLinesEx(player, 2, GRAY);
 
+       
+
+        // Рисуем пули
         for (int i = 0; i < MAX_BULLETS; i++) {
             if (bullets[i].active) {
                 DrawCircleV(bullets[i].position, 5, RED);
             }
         }
 
+        // Инструкции
         DrawText("Use W to move forward", 10, 10, 20, DARKGRAY);
         DrawText("Use S to move backward", 10, 40, 20, DARKGRAY);
         DrawText("Use A/D to rotate", 10, 70, 20, DARKGRAY);
-        DrawText("Click LEFT MOUSE BUTTON to shoot", 10, 100, 20, DARKGRAY);
+        DrawText("Press ENTER to shoot", 10, 100, 20, DARKGRAY);
         DrawFPS(screenWidth - 90, 10);
-
-        // Рисуем прицел мышью
-        Vector2 mousePos = GetMousePosition();
-        int crosshairSize = 10;
-        DrawLine(mousePos.x - crosshairSize, mousePos.y, mousePos.x + crosshairSize, mousePos.y, BLACK);
-        DrawLine(mousePos.x, mousePos.y - crosshairSize, mousePos.x, mousePos.y + crosshairSize, BLACK);
 
         EndDrawing();
     }
