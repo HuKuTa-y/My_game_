@@ -2,7 +2,7 @@
 #include <math.h>
 
 #define MAX_BULLETS 100
-#define NUM_BRICK_BLOCKS 5
+#define NUM_BRICK_BLOCKS 10
 #define NUM_STONE_BLOCKS 1
 #define NUM_BUSHES 3
 #define TRANSITION_DURATION 2.0f // время плавного перехода в секундах
@@ -58,6 +58,8 @@ void SpawnBullet(Bullet bullets[], Vector2 startPos, float angleDeg, float bulle
 int main(void) {
     const int screenWidth = 800;
     const int screenHeight = 600;
+    const int mapWidth = 2000;
+    const int mapHeight = 2000;
 
     InitWindow(screenWidth, screenHeight, "Rotation with A/D keys");
     DisableCursor();
@@ -81,25 +83,35 @@ int main(void) {
     const float rotationSpeed = 90.0f;
 
     BrickBlock brickBlocks[NUM_BRICK_BLOCKS] = {
-        { Vector2 { 100, 100 }, Vector2 { 50, 50 }, true },
-        { Vector2 { 300, 200 }, Vector2 { 80, 80 }, true },
-        { Vector2 { 500, 400 }, Vector2 { 60, 60 }, true },
-        { Vector2 { 200, 500 }, Vector2 { 70, 40 }, true },
-        { Vector2 { 600, 150 }, Vector2 { 50, 100 }, true }
+        { Vector2 { 300, 100 }, Vector2 { 50, 50 }, true },
+        { Vector2 { 1500, 1700 }, Vector2 { 80, 80 }, true },
+        { Vector2 { 900, 600 }, Vector2 { 60, 60 }, true },
+        { Vector2 { 1200, 700 }, Vector2 { 70, 40 }, true },
+        { Vector2 { 600, 1550 }, Vector2 { 50, 100 }, true },
+        { Vector2 { 100, 1150 }, Vector2 { 50, 100 }, true },
+        { Vector2 { 200, 1900 }, Vector2 { 50, 100 }, true },
+        { Vector2 { 1900, 450 }, Vector2 { 50, 100 }, true },
+        { Vector2 { 1350, 700 }, Vector2 { 50, 100 }, true },
+        { Vector2 { 1700, 1150 }, Vector2 { 50, 100 }, true },
     };
 
     StoneBlock stoneBlocks[NUM_STONE_BLOCKS] = {
-        { Vector2 { 400, 100 }, Vector2 { 60, 60 }, true }
+        { Vector2 { 1300, 900 }, Vector2 { 60, 60 }, true }
     };
 
     BushBlock bushes[NUM_BUSHES] = {
         { Vector2 { 150, 150 }, Vector2 { 80, 80 }, true, 1.0f, 1.0f, 0.0f, false, BLOCK_TYPE_BUSH },
         { Vector2 { 400, 300 }, Vector2 { 100, 50 }, true, 1.0f, 1.0f, 0.0f, false, BLOCK_TYPE_BUSH },
-        { Vector2 { 600, 300 }, Vector2 { 100, 100 }, true, 1.0f, 1.0f, 0.0f, false, BLOCK_TYPE_BUSH }
+        { Vector2 { 600, 900 }, Vector2 { 100, 100 }, true, 1.0f, 1.0f, 0.0f, false, BLOCK_TYPE_BUSH }
     };
+
+    Camera2D camera = { 0 };
 
     while (!WindowShouldClose()) {
         float deltaTime = GetFrameTime();
+        camera.target = Vector2{ player.x + player.width / 2, player.y + player.height / 2 };
+        camera.offset = Vector2{ screenWidth / 2, screenHeight / 2 };
+        camera.zoom = 1.0f;
         float radians = DEG2RAD * rotation;
 
         // Обработка вращения и движения
@@ -162,8 +174,8 @@ int main(void) {
             player.x = 0;
             velocity.x = -velocity.x;
         }
-        else if (player.x + player.width > screenWidth) {
-            player.x = screenWidth - player.width;
+        else if (player.x + player.width > mapWidth) {
+            player.x = mapWidth - player.width;
             velocity.x = -velocity.x;
         }
 
@@ -171,8 +183,8 @@ int main(void) {
             player.y = 0;
             velocity.y = -velocity.y;
         }
-        else if (player.y + player.height > screenHeight) {
-            player.y = screenHeight - player.height;
+        else if (player.y + player.height > mapHeight) {
+            player.y = mapHeight - player.height;
             velocity.y = -velocity.y;
         }
 
@@ -187,8 +199,8 @@ int main(void) {
             if (bullets[i].active) {
                 bullets[i].position.x += bullets[i].velocity.x * deltaTime;
                 bullets[i].position.y += bullets[i].velocity.y * deltaTime;
-                if (bullets[i].position.x < 0 || bullets[i].position.x > screenWidth ||
-                    bullets[i].position.y < 0 || bullets[i].position.y > screenHeight) {
+                if (bullets[i].position.x < 0 || bullets[i].position.x > mapWidth ||
+                    bullets[i].position.y < 0 || bullets[i].position.y > mapHeight) {
                     bullets[i].active = false;
                 }
                 for (int b = 0; b < NUM_BRICK_BLOCKS; b++) {
@@ -271,9 +283,12 @@ int main(void) {
         BeginDrawing();
         ClearBackground(RAYWHITE);
 
+        BeginMode2D(camera);
+
         Vector2 origin = { player.width / 2, player.height / 2 };
         DrawRectanglePro(player, origin, rotation, BLUE);
         DrawRectangleLinesEx(player, 2, GRAY);
+
 
         for (int b = 0; b < NUM_BRICK_BLOCKS; b++) {
             if (brickBlocks[b].active) {
@@ -338,6 +353,7 @@ int main(void) {
             }
         }
 
+        EndMode2D();
         // --- Конец отрисовки ---
         DrawText("Use W to move forward", 10, 10, 20, DARKGRAY);
         DrawText("Use S to move backward", 10, 40, 20, DARKGRAY);
