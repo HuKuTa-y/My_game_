@@ -13,7 +13,8 @@
 #define ENEMY_VIEW_RADIUS 300.0f
 #define ENEMY_FIRE_RADIUS 250.0f
 #define ENEMY_PATROL_RADIUS 150.0f
-
+float bulletAngle = 0.0f;
+int enemiesKilled = 0; // объявляем глобально или внутри main
 int playerHits = 0;
 int score = 0;
 
@@ -63,7 +64,7 @@ typedef struct {
 } Enemy;
 
 Vector2 impulse = { 0, 0 };
-
+float yOffset = 10.0f;
 // Расширенная структура врага для вращения
 typedef struct {
     Vector2 position;
@@ -76,6 +77,8 @@ typedef struct {
     float rotationSpeed;      // скорость вращения
     int rotationDirection;    // направление вращения (1 или -1)
 } EnemyExt;
+
+
 
 void SpawnBullet(Bullet bullets[], Vector2 startPos, float angleDeg, float bulletSpeed, bool fromPlayer) {
     for (int i = 0; i < MAX_BULLETS; i++) {
@@ -97,6 +100,9 @@ Vector2 GetRandomPatrolTarget(Vector2 currentPos, float radius) {
 }
 
 int main(void) {
+    float rotation2 = 0.0f;
+    int playerLives = 5; // количество жизней   
+    int enemiesKilled = 0; // объявляем глобально или внутри main
     srand((unsigned int)time(NULL));
     const int screenWidth = 800;
     const int screenHeight = 600;
@@ -104,14 +110,23 @@ int main(void) {
     const int mapHeight = 2000;
 
     InitWindow(screenWidth, screenHeight, "AI Enemies");
+    Texture2D playerTexture = LoadTexture("tanks.png");
+    Texture2D bulletTexture = LoadTexture("pull.png");
     DisableCursor();
     SetTargetFPS(60);
 
     Rectangle player = {
         (float)screenWidth / 2 - 35,
         (float)screenHeight / 2 - 25,
-        70, 40
+        50, 40
     };
+
+    Rectangle player2 = {
+    (float)screenWidth / 2 + 100, // немного справа, чтобы не перекрываться
+    (float)screenHeight / 2 - 25,
+    50, 40
+    };
+    Vector2 velocity2 = { 0.0f, 0.0f };
 
     Vector2 velocity = { 0.0f, 0.0f };
     const float maxSpeed = 400.0f;
@@ -174,7 +189,92 @@ int main(void) {
         camera.offset = Vector2{ (float)screenWidth / 2, (float)screenHeight / 2 };
         camera.zoom = 1.0f;
         float radians = DEG2RAD * rotation;
+        bool rotateLeft2 = IsKeyDown(KEY_Q);
+        bool rotateRight2 = IsKeyDown(KEY_E);
+        bool moveForward2 = IsKeyDown(KEY_UP);      // стрелка вверх
+        bool moveBackward2 = IsKeyDown(KEY_DOWN);   // стрелка вниз
+        
+        // Обработка вращения и движения второго игрока
+        float radians2 = DEG2RAD * rotation2; // объявите переменную rotation2
+        // добавьте объявление: float rotation2 = 0.0f; в начале main
+        // и инициализируйте его перед циклом
 
+        if (rotateLeft2 && moveBackward2) {
+            rotation2 += rotationSpeed * deltaTime;
+            float dirX = cosf(radians2);
+            float dirY = sinf(radians2);
+            velocity2.x -= dirX * acceleration * deltaTime;
+            velocity2.y -= dirY * acceleration * deltaTime;
+        }
+        else if (rotateRight2 && moveBackward2) {
+            rotation2 -= rotationSpeed * deltaTime;
+            float dirX = cosf(radians2);
+            float dirY = sinf(radians2);
+            velocity2.x -= dirX * acceleration * deltaTime;
+            velocity2.y -= dirY * acceleration * deltaTime;
+        }
+        else {
+            if (rotateLeft2) {
+                rotation2 -= rotationSpeed * deltaTime;
+            }
+            if (rotateRight2) {
+                rotation2 += rotationSpeed * deltaTime;
+            }
+            if (moveForward2) {
+                float dirX = cosf(radians2);
+                float dirY = sinf(radians2);
+                velocity2.x += dirX * acceleration * deltaTime;
+                velocity2.y += dirY * acceleration * deltaTime;
+            }
+            if (moveBackward2) {
+                float dirX = cosf(radians2);
+                float dirY = sinf(radians2);
+                velocity2.x -= dirX * acceleration * deltaTime;
+                velocity2.y -= dirY * acceleration * deltaTime;
+            }
+        }
+
+        // Ограничение скорости для второго игрока
+        float speed2 = sqrtf(velocity2.x * velocity2.x + velocity2.y * velocity2.y);
+        if (speed2 > maxSpeed) {
+            velocity2.x = (velocity2.x / speed2) * maxSpeed;
+            velocity2.y = (velocity2.y / speed2) * maxSpeed;
+        }
+
+        // Фрикция
+        velocity2.x *= friction;
+        velocity2.y *= friction;
+        if (fabsf(velocity2.x) < 0.5f) velocity2.x = 0;
+        if (fabsf(velocity2.y) < 0.5f) velocity2.y = 0;
+
+        // Обновление позиции второго игрока
+        player2.x += velocity2.x * deltaTime;
+        player2.y += velocity2.y * deltaTime;
+
+        // границы для второго игрока
+        if (player2.x < 0) {
+            player2.x = 0;
+            velocity2.x = -velocity2.x;
+        }
+        else if (player2.x + player2.width > mapWidth) {
+            player2.x = mapWidth - player2.width;
+            velocity2.x = -velocity2.x;
+        }
+
+        if (player2.y < 0) {
+            player2.y = 0;
+            velocity2.y = -velocity2.y;
+        }
+        else if (player2.y + player2.height > mapHeight) {
+            player2.y = mapHeight - player2.height;
+            velocity2.y = -velocity2.y;
+        }
+
+        // Стрельба второго игрока (например, клавишей SPACE)
+        if (IsKeyPressed(KEY_SPACE)) {
+            Vector2 startPos = { player2.x, player2.y };
+            SpawnBullet(bullets, startPos, rotation2, 600.0f, true);
+        }
         // Обработка вращения и движения
         bool rotateLeft = IsKeyDown(KEY_A);
         bool rotateRight = IsKeyDown(KEY_D);
@@ -276,12 +376,14 @@ int main(void) {
 
                 if (newPos.x < 0 || newPos.x > mapWidth - 50) {
                     enemies[i].velocity.x = -enemies[i].velocity.x;
-                } else {
+                }
+                else {
                     enemies[i].position.x = newPos.x;
                 }
                 if (newPos.y < 0 || newPos.y > mapHeight - 50) {
                     enemies[i].velocity.y = -enemies[i].velocity.y;
-                } else {
+                }
+                else {
                     enemies[i].position.y = newPos.y;
                 }
 
@@ -302,7 +404,8 @@ int main(void) {
                         SpawnBullet(bullets, startPos, angle, 300.0f, false);
                         enemies[i].shootTimer = 2.0f;
                     }
-                } else {
+                }
+                else {
                     enemies[i].hasTarget = false;
                     if (sqrtf((enemies[i].patrolTarget.x - enemies[i].position.x) * (enemies[i].patrolTarget.x - enemies[i].position.x) +
                         (enemies[i].patrolTarget.y - enemies[i].position.y) * (enemies[i].patrolTarget.y - enemies[i].position.y)) < 10) {
@@ -323,6 +426,7 @@ int main(void) {
         // --- Обработка пуль --- //
         for (int i = 0; i < MAX_BULLETS; i++) {
             if (bullets[i].active) {
+                float bulletAngle = atan2f(bullets[i].velocity.y, bullets[i].velocity.x) * RAD2DEG;
                 bullets[i].position.x += bullets[i].velocity.x * deltaTime;
                 bullets[i].position.y += bullets[i].velocity.y * deltaTime;
                 if (bullets[i].position.x < 0 || bullets[i].position.x > mapWidth ||
@@ -384,6 +488,7 @@ int main(void) {
                 }
             }
         }
+
 
         // Отталкивание с блоками
         for (int b = 0; b < NUM_BRICK_BLOCKS; b++) {
@@ -459,12 +564,14 @@ int main(void) {
 
                 if (newPos.x < 0 || newPos.x > mapWidth - 50) {
                     enemies[i].velocity.x = -enemies[i].velocity.x;
-                } else {
+                }
+                else {
                     enemies[i].position.x = newPos.x;
                 }
                 if (newPos.y < 0 || newPos.y > mapHeight - 50) {
                     enemies[i].velocity.y = -enemies[i].velocity.y;
-                } else {
+                }
+                else {
                     enemies[i].position.y = newPos.y;
                 }
 
@@ -485,7 +592,8 @@ int main(void) {
                         SpawnBullet(bullets, startPos, angle, 300.0f, false);
                         enemies[i].shootTimer = 2.0f;
                     }
-                } else {
+                }
+                else {
                     enemies[i].hasTarget = false;
                     if (sqrtf((enemies[i].patrolTarget.x - enemies[i].position.x) * (enemies[i].patrolTarget.x - enemies[i].position.x) +
                         (enemies[i].patrolTarget.y - enemies[i].position.y) * (enemies[i].patrolTarget.y - enemies[i].position.y)) < 10) {
@@ -504,79 +612,83 @@ int main(void) {
         }
 
         // --- Обработка пуль --- //
-for (int i = 0; i < MAX_BULLETS; i++) {
-    if (bullets[i].active) {
-        bullets[i].position.x += bullets[i].velocity.x * deltaTime;
-        bullets[i].position.y += bullets[i].velocity.y * deltaTime;
-        if (bullets[i].position.x < 0 || bullets[i].position.x > mapWidth ||
-            bullets[i].position.y < 0 || bullets[i].position.y > mapHeight) {
-            bullets[i].active = false;
-        }
-        // столкновения с кирпичами и камнями
-        for (int b = 0; b < NUM_BRICK_BLOCKS; b++) {
-            if (brickBlocks[b].active) {
-                Rectangle rect = { brickBlocks[b].position.x, brickBlocks[b].position.y, brickBlocks[b].size.x, brickBlocks[b].size.y };
-                if (CheckCollisionPointRec(bullets[i].position, rect)) {
+        for (int i = 0; i < MAX_BULLETS; i++) {
+            if (bullets[i].active) {
+                bullets[i].position.x += bullets[i].velocity.x * deltaTime;
+                bullets[i].position.y += bullets[i].velocity.y * deltaTime;
+                if (bullets[i].position.x < 0 || bullets[i].position.x > mapWidth ||
+                    bullets[i].position.y < 0 || bullets[i].position.y > mapHeight) {
                     bullets[i].active = false;
-                    brickBlocks[b].active = false;
-                    Vector2 blockCenter = { brickBlocks[b].position.x + brickBlocks[b].size.x / 2,
-                                                   brickBlocks[b].position.y + brickBlocks[b].size.y / 2 };
-                    Vector2 playerCenter = { player.x + player.width / 2,
-                                             player.y + player.height / 2 };
-                    Vector2 diff = { playerCenter.x - blockCenter.x, playerCenter.y - blockCenter.y };
-                    float length = sqrtf(diff.x * diff.x + diff.y * diff.y);
-                    if (length != 0) {
-                        float minDistance = 50.0f;
-                        float maxDistance = 200.0f;
-                        float impulseStrength;
-                        if (length < minDistance) impulseStrength = 1000.0f;
-                        else if (length > maxDistance) impulseStrength = 100.0f;
-                        else {
-                            float t = (length - minDistance) / (maxDistance - minDistance);
-                            impulseStrength = 1000.0f * (1 - t) + 100.0f * t;
+                }
+                // столкновения с кирпичами и камнями
+                for (int b = 0; b < NUM_BRICK_BLOCKS; b++) {
+                    if (brickBlocks[b].active) {
+                        Rectangle rect = { brickBlocks[b].position.x, brickBlocks[b].position.y, brickBlocks[b].size.x, brickBlocks[b].size.y };
+                        if (CheckCollisionPointRec(bullets[i].position, rect)) {
+                            bullets[i].active = false;
+                            brickBlocks[b].active = false;
+                            Vector2 blockCenter = { brickBlocks[b].position.x + brickBlocks[b].size.x / 2,
+                                                           brickBlocks[b].position.y + brickBlocks[b].size.y / 2 };
+                            Vector2 playerCenter = { player.x + player.width / 2,
+                                                     player.y + player.height / 2 };
+                            Vector2 diff = { playerCenter.x - blockCenter.x, playerCenter.y - blockCenter.y };
+                            float length = sqrtf(diff.x * diff.x + diff.y * diff.y);
+                            if (length != 0) {
+                                float minDistance = 50.0f;
+                                float maxDistance = 200.0f;
+                                float impulseStrength;
+                                if (length < minDistance) impulseStrength = 1000.0f;
+                                else if (length > maxDistance) impulseStrength = 100.0f;
+                                else {
+                                    float t = (length - minDistance) / (maxDistance - minDistance);
+                                    impulseStrength = 1000.0f * (1 - t) + 100.0f * t;
+                                }
+                                velocity.x += (diff.x / length) * impulseStrength;
+                                velocity.y += (diff.y / length) * impulseStrength;
+                            }
+                            break;
                         }
-                        velocity.x += (diff.x / length) * impulseStrength;
-                        velocity.y += (diff.y / length) * impulseStrength;
                     }
-                    break;
                 }
-            }
-        }
-        for (int s = 0; s < NUM_STONE_BLOCKS; s++) {
-            if (stoneBlocks[s].active) {
-                Rectangle rect = { stoneBlocks[s].position.x, stoneBlocks[s].position.y, stoneBlocks[s].size.x, stoneBlocks[s].size.y };
-                if (CheckCollisionPointRec(bullets[i].position, rect)) {
-                    bullets[i].active = false;
-                    break;
+                for (int s = 0; s < NUM_STONE_BLOCKS; s++) {
+                    if (stoneBlocks[s].active) {
+                        Rectangle rect = { stoneBlocks[s].position.x, stoneBlocks[s].position.y, stoneBlocks[s].size.x, stoneBlocks[s].size.y };
+                        if (CheckCollisionPointRec(bullets[i].position, rect)) {
+                            bullets[i].active = false;
+                            break;
+                        }
+                    }
                 }
-            }
-        }
 
-        // Попадание по врагу (от игрока)
-        if (bullets[i].fromPlayer) {
-            for (int j = 0; j < NUM_ENEMIES; j++) {
-                if (enemies[j].active) {
-                    Rectangle enemyRect = { enemies[j].position.x, enemies[j].position.y, 50, 50 };
-                    if (CheckCollisionPointRec(bullets[i].position, enemyRect)) {
-                        enemies[j].active = false;
-                        bullets[i].active = false;
-                        break;
+                // В месте, где враг уничтожается:
+                if (bullets[i].fromPlayer) {
+                    for (int j = 0; j < NUM_ENEMIES; j++) {
+                        if (enemies[j].active) {
+                            Rectangle enemyRect = { enemies[j].position.x, enemies[j].position.y, 50, 50 };
+                            if (CheckCollisionPointRec(bullets[i].position, enemyRect)) {
+                                enemies[j].active = false;
+                                bullets[i].active = false;
+                                enemiesKilled++; // счетчик убитых врагов
+                                break;
+                            }
+                        }
                     }
                 }
+                else { // пули врагов
+                    Rectangle playerRect = { player.x, player.y, player.width, player.height };
+                    if (CheckCollisionPointRec(bullets[i].position, playerRect)) {
+                        bullets[i].active = false;
+                        playerLives--;
+                        if (playerLives <= 0) {
+                            // завершение игры или вывод сообщения
+                            CloseWindow();
+                            return 0;
+                        }
+                    }
+                } // <-- добавленная закрывающая скобка
             }
-        }
-        // Попадание по игроку (от врагов)
-        else { // пули врагов
-            Rectangle playerRect = { player.x, player.y, player.width, player.height };
-            if (CheckCollisionPointRec(bullets[i].position, playerRect)) {
-                bullets[i].active = false;
-                // Можно уменьшить здоровье игрока или сделать что-то еще
-                // Например: playerHealth--;
-                break;
-            }
-        }
-    }
-}
+        }      
+
 
         // Отталкивание с блоками
         for (int b = 0; b < NUM_BRICK_BLOCKS; b++) {
@@ -596,11 +708,40 @@ for (int i = 0; i < MAX_BULLETS; i++) {
             }
         }
 
+        // Подсчет активных врагов
+        int activeEnemiesCount = 0;
+        for (int i = 0; i < NUM_ENEMIES; i++) {
+            if (enemies[i].active) activeEnemiesCount++;
+        }
+
+        // Спавн новых врагов, если осталось меньше 3
+        if (activeEnemiesCount < 3) {
+            int enemiesToSpawn = 2;
+            for (int i = 0; i < NUM_ENEMIES && enemiesToSpawn > 0; i++) {
+                if (!enemies[i].active) {
+                    enemies[i].active = true;
+                    enemies[i].position.x = rand() % (mapWidth - 50);
+                    enemies[i].position.y = rand() % (mapHeight - 50);
+                    enemies[i].hasTarget = false;
+                    enemies[i].shootTimer = 2.0f;
+                    enemies[i].patrolTarget = GetRandomPatrolTarget(enemies[i].position, ENEMY_PATROL_RADIUS);
+                    float randAngleDeg = (float)(rand() % 360);
+                    float randRad = DEG2RAD * randAngleDeg;
+                    enemies[i].velocity.x = cosf(randRad) * ENEMY_SPEED;
+                    enemies[i].velocity.y = sinf(randRad) * ENEMY_SPEED;
+                    enemies[i].rotationAngle = (float)(rand() % 360);
+                    enemies[i].rotationSpeed = 60 + rand() % 60; // 60-120 deg/sec
+                    enemies[i].rotationDirection = (rand() % 2) * 2 - 1; // 1 или -1
+                    enemiesToSpawn--;
+                }
+            }
+        }
+
         // Добавляем импульс
         velocity.x += impulse.x;
         velocity.y += impulse.y;
         // Плавное затухание импульса
-        float impulseDamping = 0.1f;
+
         impulse.x += (0 - impulse.x) * impulseDamping;
         impulse.y += (0 - impulse.y) * impulseDamping;
 
@@ -655,12 +796,14 @@ for (int i = 0; i < MAX_BULLETS; i++) {
 
                 if (newPos.x < 0 || newPos.x > mapWidth - 50) {
                     enemies[i].velocity.x = -enemies[i].velocity.x;
-                } else {
+                }
+                else {
                     enemies[i].position.x = newPos.x;
                 }
                 if (newPos.y < 0 || newPos.y > mapHeight - 50) {
                     enemies[i].velocity.y = -enemies[i].velocity.y;
-                } else {
+                }
+                else {
                     enemies[i].position.y = newPos.y;
                 }
 
@@ -681,7 +824,8 @@ for (int i = 0; i < MAX_BULLETS; i++) {
                         SpawnBullet(bullets, startPos, angle, 300.0f, false);
                         enemies[i].shootTimer = 2.0f;
                     }
-                } else {
+                }
+                else {
                     enemies[i].hasTarget = false;
                     if (sqrtf((enemies[i].patrolTarget.x - enemies[i].position.x) * (enemies[i].patrolTarget.x - enemies[i].position.x) +
                         (enemies[i].patrolTarget.y - enemies[i].position.y) * (enemies[i].patrolTarget.y - enemies[i].position.y)) < 10) {
@@ -703,11 +847,17 @@ for (int i = 0; i < MAX_BULLETS; i++) {
         BeginDrawing();
         ClearBackground(RAYWHITE);
         BeginMode2D(camera);
+        Rectangle sourceRec = { 0, 0, (float)playerTexture.width, (float)playerTexture.height };
 
-        DrawRectangleLinesEx(Rectangle{ 0, 0, (float)mapWidth, (float)mapHeight }, 3, DARKGRAY);
+        // позиция и размер — совпадает с вашей фигурой
+        Rectangle destRec = { player.x, player.y, player.width, player.height };
+
+        // точка вращения — центр фигуры
         Vector2 origin = { player.width / 2, player.height / 2 };
-        DrawRectanglePro(player, origin, rotation, BLUE);
-        DrawRectangleLinesEx(player, 2, GRAY);
+        Rectangle destRec2 = { player2.x, player2.y, player2.width, player2.height };
+        DrawTexturePro(playerTexture, sourceRec, destRec2, origin, rotation2, WHITE);
+        // рисуем текстуру с учетом вращения
+        DrawTexturePro(playerTexture, sourceRec, destRec, origin, rotation, WHITE);
 
         for (int b = 0; b < NUM_BRICK_BLOCKS; b++) {
             if (brickBlocks[b].active) {
@@ -758,30 +908,51 @@ for (int i = 0; i < MAX_BULLETS; i++) {
             }
         }
 
+        // Перед циклом отрисовки пуль
+        float bulletAngle = 0.0f;
+
         for (int i = 0; i < MAX_BULLETS; i++) {
             if (bullets[i].active) {
-                DrawCircleV(bullets[i].position, 5, RED);
+                // Расчет угла
+                bulletAngle = atan2f(bullets[i].velocity.y, bullets[i].velocity.x) * RAD2DEG;
+
+                // Отрисовка пули с учетом вращения
+                DrawTextureEx(
+                    bulletTexture,
+                    Vector2{
+                        bullets[i].position.x - bulletTexture.width / 10,
+                        bullets[i].position.y - bulletTexture.height / 10
+                    },
+                    bulletAngle,
+                    0.2f,
+                    WHITE
+                );
             }
         }
 
-        for (int i = 0; i < NUM_ENEMIES; i++) {
-            if (enemies[i].active) {
-                Rectangle rect = { enemies[i].position.x, enemies[i].position.y, 50, 50 };
-                Vector2 origin = { 25, 25 };
-                DrawRectanglePro(rect, origin, enemies[i].rotationAngle, DARKGREEN);
+
+                for (int i = 0; i < NUM_ENEMIES; i++) {
+                    if (enemies[i].active) {
+                        Rectangle rect = { enemies[i].position.x, enemies[i].position.y, 50, 50 };
+                        Vector2 origin = { 25, 25 };
+                        DrawRectanglePro(rect, origin, enemies[i].rotationAngle, DARKGREEN);
+                    }
+                }
+
+                EndMode2D();
+
+                DrawText("Use W to move forward", 10, 10, 20, DARKGRAY);
+                DrawText("Use S to move backward", 10, 40, 20, DARKGRAY);
+                DrawText("Use A/D to rotate", 10, 70, 20, DARKGRAY);
+                DrawText("Press ENTER to shoot", 10, 100, 20, DARKGRAY);
+                DrawText(TextFormat("Enemies Killed: %d", enemiesKilled), 10, 130, 20, DARKGRAY);
+                DrawText(TextFormat("Lives: %d", playerLives), 10, 160, 20, DARKGRAY);
+                DrawFPS(screenWidth - 90, 10);
+                EndDrawing();
             }
+            UnloadTexture(bulletTexture);
+            UnloadTexture(playerTexture);
+            CloseWindow();
+            return 0;
         }
-
-        EndMode2D();
-
-        DrawText("Use W to move forward", 10, 10, 20, DARKGRAY);
-        DrawText("Use S to move backward", 10, 40, 20, DARKGRAY);
-        DrawText("Use A/D to rotate", 10, 70, 20, DARKGRAY);
-        DrawText("Press ENTER to shoot", 10, 100, 20, DARKGRAY);
-        DrawFPS(screenWidth - 90, 10);
-        EndDrawing();
-    }
-
-    CloseWindow();
-    return 0;
-}
+    
