@@ -2,6 +2,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <time.h>
+#include <stdio.h>
 
 #define MAX_BULLETS 100
 #define NUM_BRICK_BLOCKS 10
@@ -13,8 +14,9 @@
 #define ENEMY_VIEW_RADIUS 300.0f
 #define ENEMY_FIRE_RADIUS 250.0f
 #define ENEMY_PATROL_RADIUS 150.0f
+
 float bulletAngle = 0.0f;
-int enemiesKilled = 0; // объявляем глобально или внутри main
+int enemiesKilled = 0;
 int playerHits = 0;
 int score = 0;
 
@@ -34,7 +36,7 @@ typedef struct {
     Vector2 position;
     Vector2 velocity;
     bool active;
-    bool fromPlayer; // добавлено
+    bool fromPlayer;
 } Bullet;
 
 typedef enum {
@@ -63,9 +65,6 @@ typedef struct {
     bool hasTarget;
 } Enemy;
 
-Vector2 impulse = { 0, 0 };
-float yOffset = 10.0f;
-// Расширенная структура врага для вращения
 typedef struct {
     Vector2 position;
     Vector2 velocity;
@@ -77,8 +76,6 @@ typedef struct {
     float rotationSpeed;      // скорость вращения
     int rotationDirection;    // направление вращения (1 или -1)
 } EnemyExt;
-
-
 
 void SpawnBullet(Bullet bullets[], Vector2 startPos, float angleDeg, float bulletSpeed, bool fromPlayer) {
     for (int i = 0; i < MAX_BULLETS; i++) {
@@ -100,18 +97,21 @@ Vector2 GetRandomPatrolTarget(Vector2 currentPos, float radius) {
 }
 
 int main(void) {
-    float rotation2 = 0.0f;
-    int playerLives = 5; // количество жизней   
-    int enemiesKilled = 0; // объявляем глобально или внутри main
+    float rotation = 0.0f;
+    float rotation2 = 0.0f; // вращение второго игрока
+    int playerLives1 = 5; // жизни первого игрока
+    int playerLives2 = 5; // жизни второго игрока
     srand((unsigned int)time(NULL));
-    const int screenWidth = 800;
-    const int screenHeight = 600;
+    const int screenWidth = 1100;
+    const int screenHeight = 900;
     const int mapWidth = 2000;
     const int mapHeight = 2000;
-
+ 
     InitWindow(screenWidth, screenHeight, "AI Enemies");
     Texture2D playerTexture = LoadTexture("tanks.png");
     Texture2D bulletTexture = LoadTexture("pull.png");
+    Texture2D map = LoadTexture("maps.png");
+    Texture2D bricks = LoadTexture("bricks.png");
     DisableCursor();
     SetTargetFPS(60);
 
@@ -122,9 +122,9 @@ int main(void) {
     };
 
     Rectangle player2 = {
-    (float)screenWidth / 2 + 100, // немного справа, чтобы не перекрываться
-    (float)screenHeight / 2 - 25,
-    50, 40
+        (float)screenWidth / 2 + 100,
+        (float)screenHeight / 2 - 25,
+        50, 40
     };
     Vector2 velocity2 = { 0.0f, 0.0f };
 
@@ -136,8 +136,7 @@ int main(void) {
     Bullet bullets[MAX_BULLETS] = { 0 };
     for (int i = 0; i < MAX_BULLETS; i++) bullets[i].active = false;
 
-    float rotation = 0.0f; // угол фигуры в градусах
-    const float rotationSpeed = 90.0f;
+    float rotationSpeed = 90.0f;
 
     BrickBlock brickBlocks[NUM_BRICK_BLOCKS] = {
         { Vector2 { 300, 100 }, Vector2 { 50, 50 }, true },
@@ -181,60 +180,155 @@ int main(void) {
         enemies[i].rotationDirection = (rand() % 2) * 2 - 1; // 1 или -1
     }
 
-    bool shootKeyPressed = false; // флаг для контроля однократной стрельбы
-
     while (!WindowShouldClose()) {
         float deltaTime = GetFrameTime();
         camera.target = Vector2{ player.x + player.width / 2, player.y + player.height / 2 };
         camera.offset = Vector2{ (float)screenWidth / 2, (float)screenHeight / 2 };
         camera.zoom = 1.0f;
+
         float radians = DEG2RAD * rotation;
-        bool rotateLeft2 = IsKeyDown(KEY_Q);
-        bool rotateRight2 = IsKeyDown(KEY_E);
-        bool moveForward2 = IsKeyDown(KEY_UP);      // стрелка вверх
-        bool moveBackward2 = IsKeyDown(KEY_DOWN);   // стрелка вниз
-        
-        // Обработка вращения и движения второго игрока
-        float radians2 = DEG2RAD * rotation2; // объявите переменную rotation2
-        // добавьте объявление: float rotation2 = 0.0f; в начале main
-        // и инициализируйте его перед циклом
 
-        if (rotateLeft2 && moveBackward2) {
-            rotation2 += rotationSpeed * deltaTime;
-            float dirX = cosf(radians2);
-            float dirY = sinf(radians2);
-            velocity2.x -= dirX * acceleration * deltaTime;
-            velocity2.y -= dirY * acceleration * deltaTime;
+        // Управление первым игроком
+        bool rotateLeft = IsKeyDown(KEY_A);
+        bool rotateRight = IsKeyDown(KEY_D);
+        bool moveForward = IsKeyDown(KEY_W);
+        bool moveBackward = IsKeyDown(KEY_S);
+
+        // Управление вторым игроком стрелками
+        bool rotateLeft2 = IsKeyDown(KEY_LEFT);
+        bool rotateRight2 = IsKeyDown(KEY_RIGHT);
+        bool moveForward2 = IsKeyDown(KEY_UP);
+        bool moveBackward2 = IsKeyDown(KEY_DOWN);
+
+        // Обработка стрельбы для первого
+        static bool prevShoot1 = false;
+        bool shoot1 = IsKeyDown(KEY_ENTER);
+        if (shoot1 && !prevShoot1) {
+            Vector2 startPos = { player.x + player.width / 2, player.y + player.height / 2 };
+            SpawnBullet(bullets, startPos, rotation, 600.0f, true); // fromPlayer = true
         }
-        else if (rotateRight2 && moveBackward2) {
+        prevShoot1 = shoot1;
+
+        // Обработка стрельбы для второго
+        static bool prevShoot2 = false;
+        bool shoot2 = IsKeyDown(KEY_RIGHT_SHIFT);
+        if (shoot2 && !prevShoot2) {
+            Vector2 startPos = { player2.x + player2.width / 2, player2.y + player2.height / 2 };
+            SpawnBullet(bullets, startPos, rotation2, 600.0f, true); // fromPlayer = false
+        }
+        prevShoot2 = shoot2;
+
+        // Внутри цикла while, после определения переменных
+
+// Объявляем номера геймпадов для каждого игрока
+        int gamepad1 = 0; // первый джойстик
+        int gamepad2 = 1; // второй джойстик
+
+        // Перед обработкой ввода проверяем наличие геймпадов
+        bool gp1Available = IsGamepadAvailable(gamepad1);
+        bool gp2Available = IsGamepadAvailable(gamepad2);
+
+        // Управление для первого игрока через джойстик
+        if (gp1Available) {
+            float axisX = GetGamepadAxisMovement(gamepad1, GAMEPAD_AXIS_LEFT_X);
+            float axisY = GetGamepadAxisMovement(gamepad1, GAMEPAD_AXIS_LEFT_Y);
+
+            // Вращение
+            if (fabsf(axisX) > 0.2f) {
+                rotation += axisX * rotationSpeed * deltaTime;
+            }
+
+            // Движение вперёд/назад
+            if (fabsf(axisY) > 0.2f) {
+                float dirX = cosf(DEG2RAD * rotation);
+                float dirY = sinf(DEG2RAD * rotation);
+                velocity.x += dirX * (-axisY) * acceleration * deltaTime;
+                velocity.y += dirY * (-axisY) * acceleration * deltaTime;
+            }
+
+            // Стрельба (например, кнопка RIGHT_FACE_DOWN)
+            if (IsGamepadButtonDown(gamepad1, GAMEPAD_BUTTON_RIGHT_FACE_DOWN)) {
+                Vector2 startPos = { player.x + player.width / 2, player.y + player.height / 2 };
+                SpawnBullet(bullets, startPos, rotation, 600.0f, true);
+            }
+        }
+
+        // Управление для второго игрока через джойстик
+        if (gp2Available) {
+            float axisX2 = GetGamepadAxisMovement(gamepad2, GAMEPAD_AXIS_LEFT_X);
+            float axisY2 = GetGamepadAxisMovement(gamepad2, GAMEPAD_AXIS_LEFT_Y);
+
+            // Вращение
+            if (fabsf(axisX2) > 0.2f) {
+                rotation2 += axisX2 * rotationSpeed * deltaTime;
+            }
+
+            // Движение вперёд/назад
+            if (fabsf(axisY2) > 0.2f) {
+                float dirX = cosf(DEG2RAD * rotation2);
+                float dirY = sinf(DEG2RAD * rotation2);
+                velocity2.x += dirX * (-axisY2) * acceleration * deltaTime;
+                velocity2.y += dirY * (-axisY2) * acceleration * deltaTime;
+            }
+
+            // Стрельба (например, кнопка RIGHT_FACE_DOWN)
+            if (IsGamepadButtonDown(gamepad2, GAMEPAD_BUTTON_RIGHT_FACE_DOWN)) {
+                Vector2 startPos = { player2.x + player2.width / 2, player2.y + player2.height / 2 };
+                SpawnBullet(bullets, startPos, rotation2, 600.0f, false);
+            }
+        }
+
+        // Вращение второго игрока стрелками
+        if (rotateLeft2) {
             rotation2 -= rotationSpeed * deltaTime;
-            float dirX = cosf(radians2);
-            float dirY = sinf(radians2);
+        }
+        if (rotateRight2) {
+            rotation2 += rotationSpeed * deltaTime;
+        }
+
+        // Вращение первого
+        if (rotateLeft) {
+            rotation -= rotationSpeed * deltaTime;
+        }
+        if (rotateRight) {
+            rotation += rotationSpeed * deltaTime;
+        }
+
+        // Движение второго
+        if (moveForward2) {
+            float dirX = cosf(DEG2RAD * rotation2);
+            float dirY = sinf(DEG2RAD * rotation2);
+            velocity2.x += dirX * acceleration * deltaTime;
+            velocity2.y += dirY * acceleration * deltaTime;
+        }
+        if (moveBackward2) {
+            float dirX = cosf(DEG2RAD * rotation2);
+            float dirY = sinf(DEG2RAD * rotation2);
             velocity2.x -= dirX * acceleration * deltaTime;
             velocity2.y -= dirY * acceleration * deltaTime;
         }
-        else {
-            if (rotateLeft2) {
-                rotation2 -= rotationSpeed * deltaTime;
-            }
-            if (rotateRight2) {
-                rotation2 += rotationSpeed * deltaTime;
-            }
-            if (moveForward2) {
-                float dirX = cosf(radians2);
-                float dirY = sinf(radians2);
-                velocity2.x += dirX * acceleration * deltaTime;
-                velocity2.y += dirY * acceleration * deltaTime;
-            }
-            if (moveBackward2) {
-                float dirX = cosf(radians2);
-                float dirY = sinf(radians2);
-                velocity2.x -= dirX * acceleration * deltaTime;
-                velocity2.y -= dirY * acceleration * deltaTime;
-            }
+
+        // Движение первого
+        if (moveForward) {
+            float dirX = cosf(radians);
+            float dirY = sinf(radians);
+            velocity.x += dirX * acceleration * deltaTime;
+            velocity.y += dirY * acceleration * deltaTime;
+        }
+        if (moveBackward) {
+            float dirX = cosf(radians);
+            float dirY = sinf(radians);
+            velocity.x -= dirX * acceleration * deltaTime;
+            velocity.y -= dirY * acceleration * deltaTime;
         }
 
-        // Ограничение скорости для второго игрока
+        // Ограничение скорости
+        float speed = sqrtf(velocity.x * velocity.x + velocity.y * velocity.y);
+        if (speed > maxSpeed) {
+            velocity.x = (velocity.x / speed) * maxSpeed;
+            velocity.y = (velocity.y / speed) * maxSpeed;
+        }
+
         float speed2 = sqrtf(velocity2.x * velocity2.x + velocity2.y * velocity2.y);
         if (speed2 > maxSpeed) {
             velocity2.x = (velocity2.x / speed2) * maxSpeed;
@@ -242,117 +336,57 @@ int main(void) {
         }
 
         // Фрикция
-        velocity2.x *= friction;
-        velocity2.y *= friction;
-        if (fabsf(velocity2.x) < 0.5f) velocity2.x = 0;
-        if (fabsf(velocity2.y) < 0.5f) velocity2.y = 0;
-
-        // Обновление позиции второго игрока
-        player2.x += velocity2.x * deltaTime;
-        player2.y += velocity2.y * deltaTime;
-
-        // границы для второго игрока
-        if (player2.x < 0) {
-            player2.x = 0;
-            velocity2.x = -velocity2.x;
-        }
-        else if (player2.x + player2.width > mapWidth) {
-            player2.x = mapWidth - player2.width;
-            velocity2.x = -velocity2.x;
-        }
-
-        if (player2.y < 0) {
-            player2.y = 0;
-            velocity2.y = -velocity2.y;
-        }
-        else if (player2.y + player2.height > mapHeight) {
-            player2.y = mapHeight - player2.height;
-            velocity2.y = -velocity2.y;
-        }
-
-        // Стрельба второго игрока (например, клавишей SPACE)
-        if (IsKeyPressed(KEY_SPACE)) {
-            Vector2 startPos = { player2.x, player2.y };
-            SpawnBullet(bullets, startPos, rotation2, 600.0f, true);
-        }
-        // Обработка вращения и движения
-        bool rotateLeft = IsKeyDown(KEY_A);
-        bool rotateRight = IsKeyDown(KEY_D);
-        bool moveForward = IsKeyDown(KEY_W);
-        bool moveBackward = IsKeyDown(KEY_S);
-
-        if (rotateLeft && moveBackward) {
-            rotation += rotationSpeed * deltaTime;
-            float dirX = cosf(radians);
-            float dirY = sinf(radians);
-            velocity.x -= dirX * acceleration * deltaTime;
-            velocity.y -= dirY * acceleration * deltaTime;
-        }
-        else if (rotateRight && moveBackward) {
-            rotation -= rotationSpeed * deltaTime;
-            float dirX = cosf(radians);
-            float dirY = sinf(radians);
-            velocity.x -= dirX * acceleration * deltaTime;
-            velocity.y -= dirY * acceleration * deltaTime;
-        }
-        else {
-            if (rotateLeft) {
-                rotation -= rotationSpeed * deltaTime;
-            }
-            if (rotateRight) {
-                rotation += rotationSpeed * deltaTime;
-            }
-            if (moveForward) {
-                float dirX = cosf(radians);
-                float dirY = sinf(radians);
-                velocity.x += dirX * acceleration * deltaTime;
-                velocity.y += dirY * acceleration * deltaTime;
-            }
-            if (moveBackward) {
-                float dirX = cosf(radians);
-                float dirY = sinf(radians);
-                velocity.x -= dirX * acceleration * deltaTime;
-                velocity.y -= dirY * acceleration * deltaTime;
-            }
-        }
-
-        float speed = sqrtf(velocity.x * velocity.x + velocity.y * velocity.y);
-        if (speed > maxSpeed) {
-            velocity.x = (velocity.x / speed) * maxSpeed;
-            velocity.y = (velocity.y / speed) * maxSpeed;
-        }
-
         velocity.x *= friction;
         velocity.y *= friction;
         if (fabsf(velocity.x) < 0.5f) velocity.x = 0;
         if (fabsf(velocity.y) < 0.5f) velocity.y = 0;
 
+        velocity2.x *= friction;
+        velocity2.y *= friction;
+        if (fabsf(velocity2.x) < 0.5f) velocity2.x = 0;
+        if (fabsf(velocity2.y) < 0.5f) velocity2.y = 0;
+
+        // Обновление позиций игроков
         player.x += velocity.x * deltaTime;
         player.y += velocity.y * deltaTime;
 
-        // границы
+        player2.x += velocity2.x * deltaTime;
+        player2.y += velocity2.y * deltaTime;
+
+        // Ограничения границ для первого
         if (player.x < 0) {
             player.x = 0;
             velocity.x = -velocity.x;
         }
-        else if (player.x + player.width > mapWidth) {
+        if (player.x + player.width > mapWidth) {
             player.x = mapWidth - player.width;
             velocity.x = -velocity.x;
         }
-
         if (player.y < 0) {
             player.y = 0;
             velocity.y = -velocity.y;
         }
-        else if (player.y + player.height > mapHeight) {
+        if (player.y + player.height > mapHeight) {
             player.y = mapHeight - player.height;
             velocity.y = -velocity.y;
         }
 
-        // Стрельба игроком
-        if (IsKeyPressed(KEY_ENTER)) {
-            Vector2 startPos = { player.x, player.y };
-            SpawnBullet(bullets, startPos, rotation, 600.0f, true);
+        // Ограничения границ для второго
+        if (player2.x < 0) {
+            player2.x = 0;
+            velocity2.x = -velocity2.x;
+        }
+        if (player2.x + player2.width > mapWidth) {
+            player2.x = mapWidth - player2.width;
+            velocity2.x = -velocity2.x;
+        }
+        if (player2.y < 0) {
+            player2.y = 0;
+            velocity2.y = -velocity2.y;
+        }
+        if (player2.y + player2.height > mapHeight) {
+            player2.y = mapHeight - player2.height;
+            velocity2.y = -velocity2.y;
         }
 
         // --- Обновление врагов --- //
@@ -364,7 +398,7 @@ int main(void) {
                 if (enemies[i].rotationAngle < 0) enemies[i].rotationAngle += 360;
 
                 // Иногда менять направление вращения
-                if (rand() % 1000 < 5) { // примерно 0.5% шанс за кадр
+                if (rand() % 1000 < 5) {
                     enemies[i].rotationDirection *= -1;
                 }
 
@@ -423,10 +457,34 @@ int main(void) {
             }
         }
 
+
+        // Обработка столкновения между игроками и отталкивания
+        {
+            Rectangle rect1 = { player.x, player.y, player.width, player.height };
+            Rectangle rect2 = { player2.x, player2.y, player2.width, player2.height };
+
+            if (CheckCollisionRecs(rect1, rect2)) {
+                Vector2 center1 = { player.x + player.width / 2, player.y + player.height / 2 };
+                Vector2 center2 = { player2.x + player2.width / 2, player2.y + player2.height / 2 };
+                Vector2 diff = { center1.x - center2.x, center1.y - center2.y };
+                float dist = sqrtf(diff.x * diff.x + diff.y * diff.y);
+                if (dist != 0) {
+                    float pushStrength = 20.0f; // сила отталкивания
+                    float overlap = (player.width + player2.width) / 2 - dist;
+                    // Расчет направления
+                    Vector2 pushDir = { diff.x / dist, diff.y / dist };
+                    // Отталкиваем каждого игрока
+                    player.x += pushDir.x * overlap * 0.5f;
+                    player.y += pushDir.y * overlap * 0.5f;
+                    player2.x -= pushDir.x * overlap * 0.5f;
+                    player2.y -= pushDir.y * overlap * 0.5f;
+                }
+            }
+        }
+
         // --- Обработка пуль --- //
         for (int i = 0; i < MAX_BULLETS; i++) {
             if (bullets[i].active) {
-                float bulletAngle = atan2f(bullets[i].velocity.y, bullets[i].velocity.x) * RAD2DEG;
                 bullets[i].position.x += bullets[i].velocity.x * deltaTime;
                 bullets[i].position.y += bullets[i].velocity.y * deltaTime;
                 if (bullets[i].position.x < 0 || bullets[i].position.x > mapWidth ||
@@ -472,223 +530,42 @@ int main(void) {
                         }
                     }
                 }
-
-                // Попадание по врагу (только пули от игрока)
+                // столкновение с врагами
                 if (bullets[i].fromPlayer) {
+                    // Пуля ИГРОКА1 — по врагам
                     for (int j = 0; j < NUM_ENEMIES; j++) {
                         if (enemies[j].active) {
                             Rectangle enemyRect = { enemies[j].position.x, enemies[j].position.y, 50, 50 };
                             if (CheckCollisionPointRec(bullets[i].position, enemyRect)) {
                                 enemies[j].active = false;
                                 bullets[i].active = false;
+                                enemiesKilled++;
                                 break;
                             }
                         }
                     }
                 }
-            }
-        }
-
-
-        // Отталкивание с блоками
-        for (int b = 0; b < NUM_BRICK_BLOCKS; b++) {
-            if (brickBlocks[b].active) {
-                Rectangle rect = { brickBlocks[b].position.x, brickBlocks[b].position.y, brickBlocks[b].size.x, brickBlocks[b].size.y };
-                if (CheckCollisionRecs(player, rect)) {
-                    Vector2 blockCenter = { brickBlocks[b].position.x + brickBlocks[b].size.x / 2, brickBlocks[b].position.y + brickBlocks[b].size.y / 2 };
-                    Vector2 playerCenter = { player.x + player.width / 2, player.y + player.height / 2 };
-                    Vector2 diff = { playerCenter.x - blockCenter.x, playerCenter.y - blockCenter.y };
-                    float repelStrength = 100.0f;
-                    float length = sqrtf(diff.x * diff.x + diff.y * diff.y);
-                    if (length != 0) {
-                        velocity.x += (diff.x / length) * repelStrength;
-                        velocity.y += (diff.y / length) * repelStrength;
-                    }
-                }
-            }
-        }
-
-        // Добавляем импульс
-        velocity.x += impulse.x;
-        velocity.y += impulse.y;
-        // Плавное затухание импульса
-        float impulseDamping = 0.1f;
-        impulse.x += (0 - impulse.x) * impulseDamping;
-        impulse.y += (0 - impulse.y) * impulseDamping;
-
-        // Обновление позиции игрока
-        player.x += velocity.x * deltaTime;
-        player.y += velocity.y * deltaTime;
-
-        // границы
-        if (player.x < 0) {
-            player.x = 0;
-            velocity.x = -velocity.x;
-        }
-        else if (player.x + player.width > mapWidth) {
-            player.x = mapWidth - player.width;
-            velocity.x = -velocity.x;
-        }
-
-        if (player.y < 0) {
-            player.y = 0;
-            velocity.y = -velocity.y;
-        }
-        else if (player.y + player.height > mapHeight) {
-            player.y = mapHeight - player.height;
-            velocity.y = -velocity.y;
-        }
-
-        // --- ОПРОС КЛАВИШ --- //
-        // Обнуляем флаг перед проверкой
-        // (Вы уже проверяете IsKeyPressed(KEY_ENTER) для стрельбы)
-
-        // --- Обновление врагов --- //
-        for (int i = 0; i < NUM_ENEMIES; i++) {
-            if (enemies[i].active) {
-                // Вращение врага
-                enemies[i].rotationAngle += enemies[i].rotationDirection * enemies[i].rotationSpeed * deltaTime;
-                if (enemies[i].rotationAngle > 360) enemies[i].rotationAngle -= 360;
-                if (enemies[i].rotationAngle < 0) enemies[i].rotationAngle += 360;
-
-                // Иногда менять направление вращения
-                if (rand() % 1000 < 5) { // примерно 0.5% шанс за кадр
-                    enemies[i].rotationDirection *= -1;
-                }
-
-                // Перемещение врага
-                Vector2 newPos = {
-                    enemies[i].position.x + enemies[i].velocity.x * deltaTime,
-                    enemies[i].position.y + enemies[i].velocity.y * deltaTime
-                };
-
-                if (newPos.x < 0 || newPos.x > mapWidth - 50) {
-                    enemies[i].velocity.x = -enemies[i].velocity.x;
-                }
                 else {
-                    enemies[i].position.x = newPos.x;
-                }
-                if (newPos.y < 0 || newPos.y > mapHeight - 50) {
-                    enemies[i].velocity.y = -enemies[i].velocity.y;
-                }
-                else {
-                    enemies[i].position.y = newPos.y;
-                }
-
-                // Стрельба по игроку
-                Vector2 playerPos = { player.x + player.width / 2, player.y + player.height / 2 };
-                Vector2 toPlayer = { playerPos.x - enemies[i].position.x, playerPos.y - enemies[i].position.y };
-                float distToPlayer = sqrtf(toPlayer.x * toPlayer.x + toPlayer.y * toPlayer.y);
-
-                enemies[i].shootTimer -= deltaTime;
-
-                if (distToPlayer <= ENEMY_VIEW_RADIUS) {
-                    enemies[i].hasTarget = true;
-                    enemies[i].patrolTarget = playerPos;
-
-                    if (enemies[i].shootTimer <= 0) {
-                        Vector2 startPos = { enemies[i].position.x + 25, enemies[i].position.y + 25 };
-                        float angle = atan2f(toPlayer.y, toPlayer.x) * RAD2DEG;
-                        SpawnBullet(bullets, startPos, angle, 300.0f, false);
-                        enemies[i].shootTimer = 2.0f;
-                    }
-                }
-                else {
-                    enemies[i].hasTarget = false;
-                    if (sqrtf((enemies[i].patrolTarget.x - enemies[i].position.x) * (enemies[i].patrolTarget.x - enemies[i].position.x) +
-                        (enemies[i].patrolTarget.y - enemies[i].position.y) * (enemies[i].patrolTarget.y - enemies[i].position.y)) < 10) {
-                        enemies[i].patrolTarget = GetRandomPatrolTarget(enemies[i].position, ENEMY_PATROL_RADIUS);
-                        Vector2 dir = { enemies[i].patrolTarget.x - enemies[i].position.x, enemies[i].patrolTarget.y - enemies[i].position.y };
-                        float length = sqrtf(dir.x * dir.x + dir.y * dir.y);
-                        if (length != 0) {
-                            dir.x /= length;
-                            dir.y /= length;
-                        }
-                        enemies[i].velocity.x = dir.x * ENEMY_SPEED;
-                        enemies[i].velocity.y = dir.y * ENEMY_SPEED;
-                    }
-                }
-            }
-        }
-
-        // --- Обработка пуль --- //
-        for (int i = 0; i < MAX_BULLETS; i++) {
-            if (bullets[i].active) {
-                bullets[i].position.x += bullets[i].velocity.x * deltaTime;
-                bullets[i].position.y += bullets[i].velocity.y * deltaTime;
-                if (bullets[i].position.x < 0 || bullets[i].position.x > mapWidth ||
-                    bullets[i].position.y < 0 || bullets[i].position.y > mapHeight) {
-                    bullets[i].active = false;
-                }
-                // столкновения с кирпичами и камнями
-                for (int b = 0; b < NUM_BRICK_BLOCKS; b++) {
-                    if (brickBlocks[b].active) {
-                        Rectangle rect = { brickBlocks[b].position.x, brickBlocks[b].position.y, brickBlocks[b].size.x, brickBlocks[b].size.y };
-                        if (CheckCollisionPointRec(bullets[i].position, rect)) {
-                            bullets[i].active = false;
-                            brickBlocks[b].active = false;
-                            Vector2 blockCenter = { brickBlocks[b].position.x + brickBlocks[b].size.x / 2,
-                                                           brickBlocks[b].position.y + brickBlocks[b].size.y / 2 };
-                            Vector2 playerCenter = { player.x + player.width / 2,
-                                                     player.y + player.height / 2 };
-                            Vector2 diff = { playerCenter.x - blockCenter.x, playerCenter.y - blockCenter.y };
-                            float length = sqrtf(diff.x * diff.x + diff.y * diff.y);
-                            if (length != 0) {
-                                float minDistance = 50.0f;
-                                float maxDistance = 200.0f;
-                                float impulseStrength;
-                                if (length < minDistance) impulseStrength = 1000.0f;
-                                else if (length > maxDistance) impulseStrength = 100.0f;
-                                else {
-                                    float t = (length - minDistance) / (maxDistance - minDistance);
-                                    impulseStrength = 1000.0f * (1 - t) + 100.0f * t;
-                                }
-                                velocity.x += (diff.x / length) * impulseStrength;
-                                velocity.y += (diff.y / length) * impulseStrength;
-                            }
-                            break;
-                        }
-                    }
-                }
-                for (int s = 0; s < NUM_STONE_BLOCKS; s++) {
-                    if (stoneBlocks[s].active) {
-                        Rectangle rect = { stoneBlocks[s].position.x, stoneBlocks[s].position.y, stoneBlocks[s].size.x, stoneBlocks[s].size.y };
-                        if (CheckCollisionPointRec(bullets[i].position, rect)) {
-                            bullets[i].active = false;
-                            break;
-                        }
-                    }
-                }
-
-                // В месте, где враг уничтожается:
-                if (bullets[i].fromPlayer) {
-                    for (int j = 0; j < NUM_ENEMIES; j++) {
-                        if (enemies[j].active) {
-                            Rectangle enemyRect = { enemies[j].position.x, enemies[j].position.y, 50, 50 };
-                            if (CheckCollisionPointRec(bullets[i].position, enemyRect)) {
-                                enemies[j].active = false;
-                                bullets[i].active = false;
-                                enemiesKilled++; // счетчик убитых врагов
-                                break;
-                            }
-                        }
-                    }
-                }
-                else { // пули врагов
-                    Rectangle playerRect = { player.x, player.y, player.width, player.height };
-                    if (CheckCollisionPointRec(bullets[i].position, playerRect)) {
+                    // Пуля врага — по игрокам
+                    Rectangle rectPlayer1 = { player.x, player.y, player.width, player.height };
+                    Rectangle rectPlayer2 = { player2.x, player2.y, player2.width, player2.height };
+                    if (CheckCollisionPointRec(bullets[i].position, rectPlayer1)) {
+                        printf("Пуля врага попала в первого игрока! Координаты пули: (%.2f, %.2f)\n", bullets[i].position.x, bullets[i].position.y);
+                        printf("До попадания: Жизни первого игрока: %d\n", playerLives1);
                         bullets[i].active = false;
-                        playerLives--;
-                        if (playerLives <= 0) {
-                            // завершение игры или вывод сообщения
-                            CloseWindow();
-                            return 0;
-                        }
+                        playerLives1--;
+                        printf("После попадания: Жизни первого игрока: %d\n", playerLives1);
+                    }   
+                    if (CheckCollisionPointRec(bullets[i].position, rectPlayer2)) {
+                        printf("Пуля врага попала во второго игрока! Координаты пули: (%.2f, %.2f)\n", bullets[i].position.x, bullets[i].position.y);
+                        printf("До попадания: Жизни второго игрока: %d\n", playerLives2);
+                        bullets[i].active = false;
+                        playerLives2--;
+                        printf("После попадания: Жизни второго игрока: %d\n", playerLives2);
                     }
-                } // <-- добавленная закрывающая скобка
+                }
             }
-        }      
-
+        }
 
         // Отталкивание с блоками
         for (int b = 0; b < NUM_BRICK_BLOCKS; b++) {
@@ -708,13 +585,11 @@ int main(void) {
             }
         }
 
-        // Подсчет активных врагов
+        // Спавн новых врагов, если осталось меньше 3
         int activeEnemiesCount = 0;
         for (int i = 0; i < NUM_ENEMIES; i++) {
             if (enemies[i].active) activeEnemiesCount++;
         }
-
-        // Спавн новых врагов, если осталось меньше 3
         if (activeEnemiesCount < 3) {
             int enemiesToSpawn = 2;
             for (int i = 0; i < NUM_ENEMIES && enemiesToSpawn > 0; i++) {
@@ -730,115 +605,9 @@ int main(void) {
                     enemies[i].velocity.x = cosf(randRad) * ENEMY_SPEED;
                     enemies[i].velocity.y = sinf(randRad) * ENEMY_SPEED;
                     enemies[i].rotationAngle = (float)(rand() % 360);
-                    enemies[i].rotationSpeed = 60 + rand() % 60; // 60-120 deg/sec
-                    enemies[i].rotationDirection = (rand() % 2) * 2 - 1; // 1 или -1
+                    enemies[i].rotationSpeed = 60 + rand() % 60;
+                    enemies[i].rotationDirection = (rand() % 2) * 2 - 1;
                     enemiesToSpawn--;
-                }
-            }
-        }
-
-        // Добавляем импульс
-        velocity.x += impulse.x;
-        velocity.y += impulse.y;
-        // Плавное затухание импульса
-
-        impulse.x += (0 - impulse.x) * impulseDamping;
-        impulse.y += (0 - impulse.y) * impulseDamping;
-
-        // Обновление позиции игрока
-        player.x += velocity.x * deltaTime;
-        player.y += velocity.y * deltaTime;
-
-        // границы
-        if (player.x < 0) {
-            player.x = 0;
-            velocity.x = -velocity.x;
-        }
-        else if (player.x + player.width > mapWidth) {
-            player.x = mapWidth - player.width;
-            velocity.x = -velocity.x;
-        }
-
-        if (player.y < 0) {
-            player.y = 0;
-            velocity.y = -velocity.y;
-        }
-        else if (player.y + player.height > mapHeight) {
-            player.y = mapHeight - player.height;
-            velocity.y = -velocity.y;
-        }
-
-        // --- ОПРОС КЛАВИШ --- //
-        // Стрельба
-        if (IsKeyPressed(KEY_ENTER)) {
-            Vector2 startPos = { player.x, player.y };
-            SpawnBullet(bullets, startPos, rotation, 600.0f, true);
-        }
-
-        // --- Обновление врагов --- //
-        for (int i = 0; i < NUM_ENEMIES; i++) {
-            if (enemies[i].active) {
-                // Вращение врага
-                enemies[i].rotationAngle += enemies[i].rotationDirection * enemies[i].rotationSpeed * deltaTime;
-                if (enemies[i].rotationAngle > 360) enemies[i].rotationAngle -= 360;
-                if (enemies[i].rotationAngle < 0) enemies[i].rotationAngle += 360;
-
-                // Иногда менять направление вращения
-                if (rand() % 1000 < 5) { // примерно 0.5% шанс за кадр
-                    enemies[i].rotationDirection *= -1;
-                }
-
-                // Перемещение врага
-                Vector2 newPos = {
-                    enemies[i].position.x + enemies[i].velocity.x * deltaTime,
-                    enemies[i].position.y + enemies[i].velocity.y * deltaTime
-                };
-
-                if (newPos.x < 0 || newPos.x > mapWidth - 50) {
-                    enemies[i].velocity.x = -enemies[i].velocity.x;
-                }
-                else {
-                    enemies[i].position.x = newPos.x;
-                }
-                if (newPos.y < 0 || newPos.y > mapHeight - 50) {
-                    enemies[i].velocity.y = -enemies[i].velocity.y;
-                }
-                else {
-                    enemies[i].position.y = newPos.y;
-                }
-
-                // Стрельба по игроку
-                Vector2 playerPos = { player.x + player.width / 2, player.y + player.height / 2 };
-                Vector2 toPlayer = { playerPos.x - enemies[i].position.x, playerPos.y - enemies[i].position.y };
-                float distToPlayer = sqrtf(toPlayer.x * toPlayer.x + toPlayer.y * toPlayer.y);
-
-                enemies[i].shootTimer -= deltaTime;
-
-                if (distToPlayer <= ENEMY_VIEW_RADIUS) {
-                    enemies[i].hasTarget = true;
-                    enemies[i].patrolTarget = playerPos;
-
-                    if (enemies[i].shootTimer <= 0) {
-                        Vector2 startPos = { enemies[i].position.x + 25, enemies[i].position.y + 25 };
-                        float angle = atan2f(toPlayer.y, toPlayer.x) * RAD2DEG;
-                        SpawnBullet(bullets, startPos, angle, 300.0f, false);
-                        enemies[i].shootTimer = 2.0f;
-                    }
-                }
-                else {
-                    enemies[i].hasTarget = false;
-                    if (sqrtf((enemies[i].patrolTarget.x - enemies[i].position.x) * (enemies[i].patrolTarget.x - enemies[i].position.x) +
-                        (enemies[i].patrolTarget.y - enemies[i].position.y) * (enemies[i].patrolTarget.y - enemies[i].position.y)) < 10) {
-                        enemies[i].patrolTarget = GetRandomPatrolTarget(enemies[i].position, ENEMY_PATROL_RADIUS);
-                        Vector2 dir = { enemies[i].patrolTarget.x - enemies[i].position.x, enemies[i].patrolTarget.y - enemies[i].position.y };
-                        float length = sqrtf(dir.x * dir.x + dir.y * dir.y);
-                        if (length != 0) {
-                            dir.x /= length;
-                            dir.y /= length;
-                        }
-                        enemies[i].velocity.x = dir.x * ENEMY_SPEED;
-                        enemies[i].velocity.y = dir.y * ENEMY_SPEED;
-                    }
                 }
             }
         }
@@ -847,24 +616,31 @@ int main(void) {
         BeginDrawing();
         ClearBackground(RAYWHITE);
         BeginMode2D(camera);
+        DrawTexture(map, 0, 0, WHITE);
         Rectangle sourceRec = { 0, 0, (float)playerTexture.width, (float)playerTexture.height };
-
-        // позиция и размер — совпадает с вашей фигурой
         Rectangle destRec = { player.x, player.y, player.width, player.height };
-
-        // точка вращения — центр фигуры
         Vector2 origin = { player.width / 2, player.height / 2 };
         Rectangle destRec2 = { player2.x, player2.y, player2.width, player2.height };
-        DrawTexturePro(playerTexture, sourceRec, destRec2, origin, rotation2, WHITE);
-        // рисуем текстуру с учетом вращения
+
+        // Отрисовка первого игрока
         DrawTexturePro(playerTexture, sourceRec, destRec, origin, rotation, WHITE);
+        // Отрисовка второго игрока стрелками
+        DrawTexturePro(playerTexture, sourceRec, destRec2, origin, rotation2, WHITE);
 
         for (int b = 0; b < NUM_BRICK_BLOCKS; b++) {
             if (brickBlocks[b].active) {
-                DrawRectangle(brickBlocks[b].position.x, brickBlocks[b].position.y, brickBlocks[b].size.x, brickBlocks[b].size.y, BROWN);
+                DrawTextureRec(
+                    bricks,
+                    Rectangle{
+                    0, 0, (float)bricks.width, (float)bricks.height
+                    },
+                    Vector2{
+                    brickBlocks[b].position.x, brickBlocks[b].position.y
+                    },
+                    WHITE
+                );
             }
         }
-
         for (int s = 0; s < NUM_STONE_BLOCKS; s++) {
             if (stoneBlocks[s].active) {
                 DrawRectangle(stoneBlocks[s].position.x, stoneBlocks[s].position.y, stoneBlocks[s].size.x, stoneBlocks[s].size.y, RED);
@@ -908,15 +684,11 @@ int main(void) {
             }
         }
 
-        // Перед циклом отрисовки пуль
+        // Пуль
         float bulletAngle = 0.0f;
-
         for (int i = 0; i < MAX_BULLETS; i++) {
             if (bullets[i].active) {
-                // Расчет угла
                 bulletAngle = atan2f(bullets[i].velocity.y, bullets[i].velocity.x) * RAD2DEG;
-
-                // Отрисовка пули с учетом вращения
                 DrawTextureEx(
                     bulletTexture,
                     Vector2{
@@ -930,29 +702,27 @@ int main(void) {
             }
         }
 
-
-                for (int i = 0; i < NUM_ENEMIES; i++) {
-                    if (enemies[i].active) {
-                        Rectangle rect = { enemies[i].position.x, enemies[i].position.y, 50, 50 };
-                        Vector2 origin = { 25, 25 };
-                        DrawRectanglePro(rect, origin, enemies[i].rotationAngle, DARKGREEN);
-                    }
-                }
-
-                EndMode2D();
-
-                DrawText("Use W to move forward", 10, 10, 20, DARKGRAY);
-                DrawText("Use S to move backward", 10, 40, 20, DARKGRAY);
-                DrawText("Use A/D to rotate", 10, 70, 20, DARKGRAY);
-                DrawText("Press ENTER to shoot", 10, 100, 20, DARKGRAY);
-                DrawText(TextFormat("Enemies Killed: %d", enemiesKilled), 10, 130, 20, DARKGRAY);
-                DrawText(TextFormat("Lives: %d", playerLives), 10, 160, 20, DARKGRAY);
-                DrawFPS(screenWidth - 90, 10);
-                EndDrawing();
+        for (int i = 0; i < NUM_ENEMIES; i++) {
+            if (enemies[i].active) {
+                Rectangle rect = { enemies[i].position.x, enemies[i].position.y, 50, 50 };
+                Vector2 origin = { 25, 25 };
+                DrawRectanglePro(rect, origin, enemies[i].rotationAngle, DARKGREEN);
             }
-            UnloadTexture(bulletTexture);
-            UnloadTexture(playerTexture);
-            CloseWindow();
-            return 0;
         }
-    
+
+        EndMode2D();
+
+        // Отображение жизней каждого игрока
+        DrawText(TextFormat("Player 1 Lives: %d", playerLives1), 10, 200, 20, DARKGRAY);
+        DrawText(TextFormat("Player 2 Lives: %d", playerLives2), 10, 230, 20, DARKGRAY);
+        
+        DrawFPS(screenWidth - 90, 10);
+        EndDrawing();
+    }
+    UnloadTexture(bricks);
+    UnloadTexture(map);
+    UnloadTexture(bulletTexture);
+    UnloadTexture(playerTexture);
+    CloseWindow();
+    return 0;
+}
