@@ -28,6 +28,21 @@ typedef struct {
 
 typedef struct {
     Vector2 position;
+    Vector2 velocity;
+    bool active;
+    float shootTimer;
+    Vector2 patrolTarget;
+    bool hasTarget;
+    float rotationAngle;
+    float rotationSpeed;
+    int rotationDirection;
+    bool exploding;            // идет анимация взрыва
+    float explosionTimer;      // таймер анимации
+    int explosionFrame;        // текущий кадр
+} EnemyExtended;
+
+typedef struct {
+    Vector2 position;
     Vector2 size;
     bool active;
 } StoneBlock;
@@ -104,9 +119,9 @@ int main(void) {
     srand((unsigned int)time(NULL));
     const int screenWidth = 1100;
     const int screenHeight = 900;
-    const int mapWidth = 2000;
-    const int mapHeight = 2000;
- 
+    const int mapWidth = 1920;
+    const int mapHeight = 1080;
+
     InitWindow(screenWidth, screenHeight, "AI Enemies");
     Texture2D playerTexture = LoadTexture("tanks.png");
     Texture2D bulletTexture = LoadTexture("pull.png");
@@ -138,17 +153,20 @@ int main(void) {
 
     float rotationSpeed = 90.0f;
 
+    // Уменьшаем размеры кирпичных блоков
+    const int brickSize = 50; // Размер стороны квадрата кирпича
+
     BrickBlock brickBlocks[NUM_BRICK_BLOCKS] = {
-        { Vector2 { 300, 100 }, Vector2 { 50, 50 }, true },
-        { Vector2 { 1500, 1700 }, Vector2 { 80, 80 }, true },
-        { Vector2 { 900, 600 }, Vector2 { 60, 60 }, true },
-        { Vector2 { 1200, 700 }, Vector2 { 70, 40 }, true },
-        { Vector2 { 600, 1550 }, Vector2 { 50, 100 }, true },
-        { Vector2 { 100, 1150 }, Vector2 { 50, 100 }, true },
-        { Vector2 { 200, 1900 }, Vector2 { 50, 100 }, true },
+        { Vector2 { 300, 100 }, Vector2 { brickSize, brickSize }, true },
+        { Vector2 { 1500, 900 }, Vector2 { brickSize, brickSize }, true },
+        { Vector2 { 900, 600 }, Vector2 { brickSize, brickSize }, true },
+        { Vector2 { 1200, 700 }, Vector2 { 40, 40 }, true },
+        { Vector2 { 600, 300 }, Vector2 { 50, 100 }, true },
+        { Vector2 { 100, 750 }, Vector2 { 50, 100 }, true },
+        { Vector2 { 200, 50 }, Vector2 { 50, 100 }, true },
         { Vector2 { 1900, 450 }, Vector2 { 50, 100 }, true },
         { Vector2 { 1350, 700 }, Vector2 { 50, 100 }, true },
-        { Vector2 { 1700, 1150 }, Vector2 { 50, 100 }, true },
+        { Vector2 { 1700, 1000 }, Vector2 { 50, 100 }, true },
     };
 
     StoneBlock stoneBlocks[NUM_STONE_BLOCKS] = {
@@ -218,9 +236,7 @@ int main(void) {
         }
         prevShoot2 = shoot2;
 
-        // Внутри цикла while, после определения переменных
-
-// Объявляем номера геймпадов для каждого игрока
+        // Объявляем номера геймпадов для каждого игрока
         int gamepad1 = 0; // первый джойстик
         int gamepad2 = 1; // второй джойстик
 
@@ -246,7 +262,7 @@ int main(void) {
                 velocity.y += dirY * (-axisY) * acceleration * deltaTime;
             }
 
-            // Стрельба (например, кнопка RIGHT_FACE_DOWN)
+            // Стрельба
             if (IsGamepadButtonDown(gamepad1, GAMEPAD_BUTTON_RIGHT_FACE_DOWN)) {
                 Vector2 startPos = { player.x + player.width / 2, player.y + player.height / 2 };
                 SpawnBullet(bullets, startPos, rotation, 600.0f, true);
@@ -271,7 +287,7 @@ int main(void) {
                 velocity2.y += dirY * (-axisY2) * acceleration * deltaTime;
             }
 
-            // Стрельба (например, кнопка RIGHT_FACE_DOWN)
+            // Стрельба
             if (IsGamepadButtonDown(gamepad2, GAMEPAD_BUTTON_RIGHT_FACE_DOWN)) {
                 Vector2 startPos = { player2.x + player2.width / 2, player2.y + player2.height / 2 };
                 SpawnBullet(bullets, startPos, rotation2, 600.0f, false);
@@ -457,7 +473,6 @@ int main(void) {
             }
         }
 
-
         // Обработка столкновения между игроками и отталкивания
         {
             Rectangle rect1 = { player.x, player.y, player.width, player.height };
@@ -532,7 +547,7 @@ int main(void) {
                 }
                 // столкновение с врагами
                 if (bullets[i].fromPlayer) {
-                    // Пуля ИГРОКА1 — по врагам
+                    // Пуля ИГРОКА — по врагам
                     for (int j = 0; j < NUM_ENEMIES; j++) {
                         if (enemies[j].active) {
                             Rectangle enemyRect = { enemies[j].position.x, enemies[j].position.y, 50, 50 };
@@ -555,7 +570,7 @@ int main(void) {
                         bullets[i].active = false;
                         playerLives1--;
                         printf("После попадания: Жизни первого игрока: %d\n", playerLives1);
-                    }   
+                    }
                     if (CheckCollisionPointRec(bullets[i].position, rectPlayer2)) {
                         printf("Пуля врага попала во второго игрока! Координаты пули: (%.2f, %.2f)\n", bullets[i].position.x, bullets[i].position.y);
                         printf("До попадания: Жизни второго игрока: %d\n", playerLives2);
@@ -609,6 +624,8 @@ int main(void) {
                     enemies[i].rotationDirection = (rand() % 2) * 2 - 1;
                     enemiesToSpawn--;
                 }
+
+
             }
         }
 
@@ -616,7 +633,11 @@ int main(void) {
         BeginDrawing();
         ClearBackground(RAYWHITE);
         BeginMode2D(camera);
-        DrawTexture(map, 0, 0, WHITE);
+        // Перед отрисовкой карты
+        DrawRectangle(0, 0, screenWidth, screenHeight, BLUE); // полностью синий фон
+
+      
+        DrawTexture(map, 0, 0, BLUE);
         Rectangle sourceRec = { 0, 0, (float)playerTexture.width, (float)playerTexture.height };
         Rectangle destRec = { player.x, player.y, player.width, player.height };
         Vector2 origin = { player.width / 2, player.height / 2 };
@@ -627,20 +648,25 @@ int main(void) {
         // Отрисовка второго игрока стрелками
         DrawTexturePro(playerTexture, sourceRec, destRec2, origin, rotation2, WHITE);
 
+        // Отрисовка кирпичных блоков с уменьшенными размерами
+        int brickTextureSize = 50; // Размер стороны текстуры кирпича
+        int brickSize = 50; // Укажите соответствующий размер вашей текстуры кирпича
+
+        // В цикле отрисовки кирпичных блоков
         for (int b = 0; b < NUM_BRICK_BLOCKS; b++) {
             if (brickBlocks[b].active) {
-                DrawTextureRec(
-                    bricks,
-                    Rectangle{
-                    0, 0, (float)bricks.width, (float)bricks.height
-                    },
-                    Vector2{
-                    brickBlocks[b].position.x, brickBlocks[b].position.y
-                    },
-                    WHITE
-                );
+                Rectangle sourceRec = { 0, 0, (float)brickSize, (float)brickSize }; // часть текстуры
+                Rectangle destRec = {
+                    brickBlocks[b].position.x,
+                    brickBlocks[b].position.y,
+                    brickSize,
+                    brickSize
+                };
+                Vector2 origin = { brickSize / 2.0f, brickSize / 2.0f }; // центр блока для вращения и позиционирования
+                DrawTexturePro(bricks, sourceRec, destRec, origin, 0.0f, WHITE);
             }
         }
+
         for (int s = 0; s < NUM_STONE_BLOCKS; s++) {
             if (stoneBlocks[s].active) {
                 DrawRectangle(stoneBlocks[s].position.x, stoneBlocks[s].position.y, stoneBlocks[s].size.x, stoneBlocks[s].size.y, RED);
@@ -715,10 +741,12 @@ int main(void) {
         // Отображение жизней каждого игрока
         DrawText(TextFormat("Player 1 Lives: %d", playerLives1), 10, 200, 20, DARKGRAY);
         DrawText(TextFormat("Player 2 Lives: %d", playerLives2), 10, 230, 20, DARKGRAY);
-        
+
         DrawFPS(screenWidth - 90, 10);
         EndDrawing();
+
     }
+
     UnloadTexture(bricks);
     UnloadTexture(map);
     UnloadTexture(bulletTexture);
