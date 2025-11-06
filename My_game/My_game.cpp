@@ -114,7 +114,7 @@ Vector2 GetRandomPatrolTarget(Vector2 currentPos, float radius) {
 int main(void) {
     float rotation = 0.0f;
     float rotation2 = 0.0f; // вращение второго игрока
-    int playerLives1 = 5; // жизни первого игрока
+    int playerLives1 = 15; // жизни первого игрока
     int playerLives2 = 5; // жизни второго игрока
     int points = 0; // счетчик очков
     srand((unsigned int)time(NULL));
@@ -201,6 +201,8 @@ int main(void) {
     }
 
     while (!WindowShouldClose()) {
+        bool playerHitEnemy1 = false;
+        bool player2HitEnemy1 = false;
         float deltaTime = GetFrameTime();
         camera.target = Vector2{ player.x + player.width / 2, player.y + player.height / 2 };
         camera.offset = Vector2{ (float)screenWidth / 2, (float)screenHeight / 2 };
@@ -366,24 +368,34 @@ int main(void) {
                     enemies[i].rotationDirection *= -1;
                 }
 
-                // Перемещение врага
-                Vector2 newPos = {
-                    enemies[i].position.x + enemies[i].velocity.x * deltaTime,
-                    enemies[i].position.y + enemies[i].velocity.y * deltaTime
-                };
+                // Обновление позиции на основе текущего velocity
+                enemies[i].position.x += enemies[i].velocity.x * deltaTime;
+                enemies[i].position.y += enemies[i].velocity.y * deltaTime;
 
-                if (newPos.x < 0 || newPos.x > mapWidth - 50) {
+                // Проверка границ и отражение
+                bool changedDirection = false;
+                if (enemies[i].position.x < 0) {
+                    enemies[i].position.x = 0;
                     enemies[i].velocity.x = -enemies[i].velocity.x;
+                    changedDirection = true;
                 }
-                else {
-                    enemies[i].position.x = newPos.x;
+                if (enemies[i].position.x > mapWidth - 50) {
+                    enemies[i].position.x = mapWidth - 50;
+                    enemies[i].velocity.x = -enemies[i].velocity.x;
+                    changedDirection = true;
                 }
-                if (newPos.y < 0 || newPos.y > mapHeight - 50) {
+                if (enemies[i].position.y < 0) {
+                    enemies[i].position.y = 0;
                     enemies[i].velocity.y = -enemies[i].velocity.y;
+                    changedDirection = true;
                 }
-                else {
-                    enemies[i].position.y = newPos.y;
+                if (enemies[i].position.y > mapHeight - 50) {
+                    enemies[i].position.y = mapHeight - 50;
+                    enemies[i].velocity.y = -enemies[i].velocity.y;
+                    changedDirection = true;
                 }
+
+                // Если враг повернул (отражение или смена цели), то можно чуть изменить rotation для плавности
 
                 // Стрельба по игроку
                 Vector2 playerPos = { player.x + player.width / 2, player.y + player.height / 2 };
@@ -598,7 +610,76 @@ int main(void) {
                 if (rand() % 1000 < 5) {
                     enemies[i].rotationDirection *= -1;
                 }
+                /*// Обновление врагов
+if (enemies[i].active) {
+    // Удаляем постоянное вращение
+    // enemies[i].rotationAngle += enemies[i].rotationDirection * enemies[i].rotationSpeed * deltaTime;
+    
+    // Иногда менять направление вращения
+    if (rand() % 1000 < 5) {
+        enemies[i].rotationDirection *= -1;
+    }
 
+    // Обновление позиции врага
+    Vector2 newPos = {
+        enemies[i].position.x + enemies[i].velocity.x * deltaTime,
+        enemies[i].position.y + enemies[i].velocity.y * deltaTime
+    };
+
+    // Проверка границ
+    if (newPos.x < 0 || newPos.x > mapWidth - 50) {
+        enemies[i].velocity.x = -enemies[i].velocity.x;
+    } else {
+        enemies[i].position.x = newPos.x;
+    }
+    if (newPos.y < 0 || newPos.y > mapHeight - 50) {
+        enemies[i].velocity.y = -enemies[i].velocity.y;
+    } else {
+        enemies[i].position.y = newPos.y;
+    }
+
+    // Расчет дистанции до игрока
+    Vector2 playerPos = { player.x + player.width / 2, player.y + player.height / 2 };
+    Vector2 toPlayer = { playerPos.x - enemies[i].position.x, playerPos.y - enemies[i].position.y };
+    float distToPlayer = sqrtf(toPlayer.x * toPlayer.x + toPlayer.y * toPlayer.y);
+
+    enemies[i].shootTimer -= deltaTime;
+
+    // Перед выстрелом, вращаем врага
+    if (distToPlayer <= ENEMY_VIEW_RADIUS) {
+        enemies[i].hasTarget = true;
+        enemies[i].patrolTarget = playerPos;
+        // Вращение врага перед выстрелом
+        enemies[i].rotationAngle += enemies[i].rotationDirection * enemies[i].rotationSpeed * deltaTime;
+        if (enemies[i].rotationAngle > 360) enemies[i].rotationAngle -= 360;
+        if (enemies[i].rotationAngle < 0) enemies[i].rotationAngle += 360;
+
+        if (enemies[i].shootTimer <= 0) {
+            // Врага вращается перед выстрелом
+            float angleDeg = atan2f(toPlayer.y, toPlayer.x) * RAD2DEG;
+            Vector2 startPos = { enemies[i].position.x + 25, enemies[i].position.y + 25 };
+            SpawnBullet(bullets, startPos, angleDeg, 300.0f, false);
+            enemies[i].shootTimer = 2.0f;
+        }
+    }
+    else {
+        // Враги не вращаются, когда не в зоне зрения
+        enemies[i].hasTarget = false;
+        if (sqrtf((enemies[i].patrolTarget.x - enemies[i].position.x) * (enemies[i].patrolTarget.x - enemies[i].position.x) +
+            (enemies[i].patrolTarget.y - enemies[i].position.y) * (enemies[i].patrolTarget.y - enemies[i].position.y)) < 10) {
+            enemies[i].patrolTarget = GetRandomPatrolTarget(enemies[i].position, ENEMY_PATROL_RADIUS);
+            Vector2 dir = { enemies[i].patrolTarget.x - enemies[i].position.x, enemies[i].patrolTarget.y - enemies[i].position.y };
+            float length = sqrtf(dir.x * dir.x + dir.y * dir.y);
+            if (length != 0) {
+                dir.x /= length;
+                dir.y /= length;
+            }
+            enemies[i].velocity.x = dir.x * ENEMY_SPEED;
+            enemies[i].velocity.y = dir.y * ENEMY_SPEED;
+        }
+        // Можно оставить rotationAngle как есть или сбросить
+    }
+}*/
                 Vector2 newPos = {
                     enemies[i].position.x + enemies[i].velocity.x * deltaTime,
                     enemies[i].position.y + enemies[i].velocity.y * deltaTime
@@ -706,7 +787,62 @@ int main(void) {
                         }
                     }
                 }
-               
+
+              
+
+                for (int i = 0; i < NUM_ENEMIES; i++) {
+                    if (enemies[i].active) {
+                        Rectangle enemyRect = { enemies[i].position.x, enemies[i].position.y, 50, 50 };
+
+                        // Проверка столкновения первого игрока
+                        // В месте, где проверяете столкновение врага с игроком
+                        if (CheckCollisionRecs(player, enemyRect)) {
+                            printf("Первый игрок столкнулся с врагом! Жизни до: %d\n", playerLives1);
+                            playerLives1--;
+                            playerHitEnemy1 = true;
+
+                            // Плавное отталкивание для игрока
+                            Vector2 diffPlayer = { (player.x + player.width / 2) - (enemies[i].position.x + 25),
+                                                     (player.y + player.height / 2) - (enemies[i].position.y + 25) };
+                            float distPlayer = sqrtf(diffPlayer.x * diffPlayer.x + diffPlayer.y * diffPlayer.y);
+                            if (distPlayer != 0) {
+                                float pushDist = 5.0f; // растояние смещения
+                                player.x += (diffPlayer.x / distPlayer) * pushDist;
+                                player.y += (diffPlayer.y / distPlayer) * pushDist;
+                            }
+
+                            // Добавьте смещение врага в противоположную сторону
+                            Vector2 diffEnemy = { (enemies[i].position.x + 25) - (player.x + player.width / 2),
+                                                    (enemies[i].position.y + 25) - (player.y + player.height / 2) };
+                            float distEnemy = sqrtf(diffEnemy.x * diffEnemy.x + diffEnemy.y * diffEnemy.y);
+                            if (distEnemy != 0) {
+                                float pushDist = 5.0f; // растояние смещения врага
+                                enemies[i].position.x += (diffEnemy.x / distEnemy) * pushDist;
+                                enemies[i].position.y += (diffEnemy.y / distEnemy) * pushDist;
+                            }
+                        }
+
+                        // Проверка столкновения второго игрока
+                        if (CheckCollisionRecs(player2, enemyRect) && !player2HitEnemy1) {
+                            printf("Второй игрок столкнулся с врагом! Жизни до: %d\n", playerLives2);
+                            playerLives2--;
+                            player2HitEnemy1 = true;
+
+                            // Плавное отталкивание
+                            Vector2 diff = { (player2.x + player2.width / 2) - (enemies[i].position.x + 25),
+                                             (player2.y + player2.height / 2) - (enemies[i].position.y + 25) };
+                            float dist = sqrtf(diff.x * diff.x + diff.y * diff.y);
+                            if (dist != 0) {
+                                float pushDist = 5.0f;
+                                player2.x += (diff.x / dist) * pushDist;
+                                player2.y += (diff.y / dist) * pushDist;
+                            }
+                        }
+                    }
+                }
+                // После этого в начале следующего кадра сбрасывайте флаги
+                playerHitEnemy1 = false;
+                player2HitEnemy1 = false;
 
                 // столкновение с врагами
                 if (bullets[i].fromPlayer) {
@@ -743,6 +879,10 @@ int main(void) {
                     }
                 }
             }
+        }
+
+        if (playerLives1 <= 0 || playerLives2 <= 0) {
+            break; // Завершить игру, если жизни закончились
         }
 
         // --- Отрисовка --- //
@@ -796,6 +936,8 @@ int main(void) {
                 DrawTexturePro(bushTexture, Rectangle{ 0, 0, (float)bushTexture.width, (float)bushTexture.height }, destRec, origin, rotation, tintColor);
             }
         }
+
+
 
         // Пуль
         float bulletAngle = 0.0f;
