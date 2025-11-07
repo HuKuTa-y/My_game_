@@ -118,10 +118,10 @@ int main(void) {
     int playerLives2 = 5; // жизни второго игрока
     int points = 0; // счетчик очков
     srand((unsigned int)time(NULL));
-    const int screenWidth = 1100;
-    const int screenHeight = 900;
-    const int mapWidth = 1920;
-    const int mapHeight = 1080;
+    const int screenWidth = 1400;
+    const int screenHeight = 1000;
+    const int mapWidth = 1400;
+    const int mapHeight = 1000;
 
     InitWindow(screenWidth, screenHeight, "AI Enemies");
     Texture2D playerTexture = LoadTexture("tanks.png");
@@ -181,7 +181,7 @@ int main(void) {
         { Vector2 { 600, 900 }, Vector2 { 100, 100 }, true, 1.0f, 1.0f, 0.0f, false, BLOCK_TYPE_BUSH }
     };
 
-    Camera2D camera = { 0 };
+    //Camera2D camera = { 0 };
 
     EnemyExt enemies[NUM_ENEMIES];
     for (int i = 0; i < NUM_ENEMIES; i++) {
@@ -204,9 +204,9 @@ int main(void) {
         bool playerHitEnemy1 = false;
         bool player2HitEnemy1 = false;
         float deltaTime = GetFrameTime();
-        camera.target = Vector2{ player.x + player.width / 2, player.y + player.height / 2 };
-        camera.offset = Vector2{ (float)screenWidth / 2, (float)screenHeight / 2 };
-        camera.zoom = 1.0f;
+        //camera.target = Vector2{ player.x + player.width / 2, player.y + player.height / 2 };
+        //camera.offset = Vector2{ (float)screenWidth / 2, (float)screenHeight / 2 };
+        //camera.zoom = 1.0f;
 
         float radians = DEG2RAD * rotation;
 
@@ -610,76 +610,7 @@ int main(void) {
                 if (rand() % 1000 < 5) {
                     enemies[i].rotationDirection *= -1;
                 }
-                /*// Обновление врагов
-if (enemies[i].active) {
-    // Удаляем постоянное вращение
-    // enemies[i].rotationAngle += enemies[i].rotationDirection * enemies[i].rotationSpeed * deltaTime;
-    
-    // Иногда менять направление вращения
-    if (rand() % 1000 < 5) {
-        enemies[i].rotationDirection *= -1;
-    }
-
-    // Обновление позиции врага
-    Vector2 newPos = {
-        enemies[i].position.x + enemies[i].velocity.x * deltaTime,
-        enemies[i].position.y + enemies[i].velocity.y * deltaTime
-    };
-
-    // Проверка границ
-    if (newPos.x < 0 || newPos.x > mapWidth - 50) {
-        enemies[i].velocity.x = -enemies[i].velocity.x;
-    } else {
-        enemies[i].position.x = newPos.x;
-    }
-    if (newPos.y < 0 || newPos.y > mapHeight - 50) {
-        enemies[i].velocity.y = -enemies[i].velocity.y;
-    } else {
-        enemies[i].position.y = newPos.y;
-    }
-
-    // Расчет дистанции до игрока
-    Vector2 playerPos = { player.x + player.width / 2, player.y + player.height / 2 };
-    Vector2 toPlayer = { playerPos.x - enemies[i].position.x, playerPos.y - enemies[i].position.y };
-    float distToPlayer = sqrtf(toPlayer.x * toPlayer.x + toPlayer.y * toPlayer.y);
-
-    enemies[i].shootTimer -= deltaTime;
-
-    // Перед выстрелом, вращаем врага
-    if (distToPlayer <= ENEMY_VIEW_RADIUS) {
-        enemies[i].hasTarget = true;
-        enemies[i].patrolTarget = playerPos;
-        // Вращение врага перед выстрелом
-        enemies[i].rotationAngle += enemies[i].rotationDirection * enemies[i].rotationSpeed * deltaTime;
-        if (enemies[i].rotationAngle > 360) enemies[i].rotationAngle -= 360;
-        if (enemies[i].rotationAngle < 0) enemies[i].rotationAngle += 360;
-
-        if (enemies[i].shootTimer <= 0) {
-            // Врага вращается перед выстрелом
-            float angleDeg = atan2f(toPlayer.y, toPlayer.x) * RAD2DEG;
-            Vector2 startPos = { enemies[i].position.x + 25, enemies[i].position.y + 25 };
-            SpawnBullet(bullets, startPos, angleDeg, 300.0f, false);
-            enemies[i].shootTimer = 2.0f;
-        }
-    }
-    else {
-        // Враги не вращаются, когда не в зоне зрения
-        enemies[i].hasTarget = false;
-        if (sqrtf((enemies[i].patrolTarget.x - enemies[i].position.x) * (enemies[i].patrolTarget.x - enemies[i].position.x) +
-            (enemies[i].patrolTarget.y - enemies[i].position.y) * (enemies[i].patrolTarget.y - enemies[i].position.y)) < 10) {
-            enemies[i].patrolTarget = GetRandomPatrolTarget(enemies[i].position, ENEMY_PATROL_RADIUS);
-            Vector2 dir = { enemies[i].patrolTarget.x - enemies[i].position.x, enemies[i].patrolTarget.y - enemies[i].position.y };
-            float length = sqrtf(dir.x * dir.x + dir.y * dir.y);
-            if (length != 0) {
-                dir.x /= length;
-                dir.y /= length;
-            }
-            enemies[i].velocity.x = dir.x * ENEMY_SPEED;
-            enemies[i].velocity.y = dir.y * ENEMY_SPEED;
-        }
-        // Можно оставить rotationAngle как есть или сбросить
-    }
-}*/
+   
                 Vector2 newPos = {
                     enemies[i].position.x + enemies[i].velocity.x * deltaTime,
                     enemies[i].position.y + enemies[i].velocity.y * deltaTime
@@ -788,7 +719,7 @@ if (enemies[i].active) {
                     }
                 }
 
-              
+
 
                 for (int i = 0; i < NUM_ENEMIES; i++) {
                     if (enemies[i].active) {
@@ -888,7 +819,7 @@ if (enemies[i].active) {
         // --- Отрисовка --- //
         BeginDrawing();
         ClearBackground(RAYWHITE);
-        BeginMode2D(camera);
+        //BeginMode2D(camera);
         // Перед отрисовкой карты
         DrawRectangle(0, 0, screenWidth, screenHeight, BLUE); // полностью синий фон
 
@@ -965,7 +896,7 @@ if (enemies[i].active) {
             }
         }
 
-        EndMode2D();
+        //EndMode2D();
 
         // Отображение жизней каждого игрока
         DrawText(TextFormat("Player 1 Lives: %d", playerLives1), 10, 200, 20, DARKGRAY);
