@@ -999,8 +999,8 @@ int main(void) {
         //EndMode2D();
 
         // Отображение жизней каждого игрока
-        DrawText(TextFormat("Player 1 Lives: %d", playerLives1), 10, 200, 20, DARKGRAY);
-        DrawText(TextFormat("Player 2 Lives: %d", playerLives2), 10, 230, 20, DARKGRAY);
+        DrawText(TextFormat("Player 1 Lives: %d", playerLives1), 10, 200, 20, WHITE);
+        DrawText(TextFormat("Player 2 Lives: %d", playerLives2), 10, 230, 20, WHITE);
 
         // Отображение очков
         DrawText(TextFormat("Score: %d", score), 10, 260, 20, DARKGRAY);
