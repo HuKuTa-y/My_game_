@@ -5,9 +5,9 @@
 #include <stdio.h>
 
 #define MAX_BULLETS 100
-#define NUM_BRICK_BLOCKS 10
-#define NUM_STONE_BLOCKS 1
-#define NUM_BUSHES 3
+#define NUM_BRICK_BLOCKS 9
+#define NUM_STONE_BLOCKS 4
+#define NUM_BUSHES 6
 #define NUM_ENEMIES 3
 #define TRANSITION_DURATION 2.0f
 #define ENEMY_SPEED 100.0f
@@ -114,8 +114,8 @@ Vector2 GetRandomPatrolTarget(Vector2 currentPos, float radius) {
 int main(void) {
     float rotation = 0.0f;
     float rotation2 = 0.0f; // вращение второго игрока
-    int playerLives1 = 15; // жизни первого игрока
-    int playerLives2 = 5; // жизни второго игрока
+    int playerLives1 = 150; // жизни первого игрока
+    int playerLives2 = 500; // жизни второго игрока
     int points = 0; // счетчик очков
     srand((unsigned int)time(NULL));
     const int screenWidth = 1400;
@@ -128,7 +128,8 @@ int main(void) {
     Texture2D bulletTexture = LoadTexture("pull.png");
     Texture2D map = LoadTexture("maps.png");
     Texture2D bushTexture = LoadTexture("kust.png");
-    Texture2D bricks = LoadTexture("bricks.png");
+    Texture2D stoneTexture = LoadTexture("stone.png");
+    Texture2D bricks = LoadTexture("broke.png");
     DisableCursor();
     SetTargetFPS(60);
 
@@ -160,25 +161,30 @@ int main(void) {
 
     BrickBlock brickBlocks[NUM_BRICK_BLOCKS] = {
         { Vector2 { 300, 100 }, Vector2 { brickSize, brickSize }, true },
-        { Vector2 { 1500, 900 }, Vector2 { brickSize, brickSize }, true },
         { Vector2 { 900, 600 }, Vector2 { brickSize, brickSize }, true },
         { Vector2 { 1200, 700 }, Vector2 { 40, 40 }, true },
         { Vector2 { 600, 300 }, Vector2 { 50, 100 }, true },
         { Vector2 { 100, 750 }, Vector2 { 50, 100 }, true },
         { Vector2 { 200, 50 }, Vector2 { 50, 100 }, true },
-        { Vector2 { 1900, 450 }, Vector2 { 50, 100 }, true },
-        { Vector2 { 1350, 700 }, Vector2 { 50, 100 }, true },
-        { Vector2 { 1700, 1000 }, Vector2 { 50, 100 }, true },
+        { Vector2 { 500, 450 }, Vector2 { 50, 100 }, true },
+        { Vector2 { 1350, 450 }, Vector2 { 50, 100 }, true },
+        { Vector2 { 850, 950 }, Vector2 { 50, 100 }, true },
     };
 
     StoneBlock stoneBlocks[NUM_STONE_BLOCKS] = {
-        { Vector2 { 1300, 900 }, Vector2 { 60, 60 }, true }
+        { Vector2 { 1300, 900 }, Vector2 { 60, 60 }, true },
+        { Vector2 { 500, 350 }, Vector2 { 60, 60 }, true },
+        { Vector2 { 890, 690}, Vector2 { 60, 60 }, true },
+        { Vector2 { 1000, 550}, Vector2 { 60, 60 }, true },
     };
 
     BushBlock bushes[NUM_BUSHES] = {
         { Vector2 { 150, 150 }, Vector2 { 80, 80 }, true, 1.0f, 1.0f, 0.0f, false, BLOCK_TYPE_BUSH },
         { Vector2 { 400, 300 }, Vector2 { 100, 50 }, true, 1.0f, 1.0f, 0.0f, false, BLOCK_TYPE_BUSH },
-        { Vector2 { 600, 900 }, Vector2 { 100, 100 }, true, 1.0f, 1.0f, 0.0f, false, BLOCK_TYPE_BUSH }
+        { Vector2 { 600, 850 }, Vector2 { 100, 100 }, true, 1.0f, 1.0f, 0.0f, false, BLOCK_TYPE_BUSH },
+        { Vector2 { 900, 650 }, Vector2 { 80, 80 }, true, 1.0f, 1.0f, 0.0f, false, BLOCK_TYPE_BUSH },
+        { Vector2 { 1250, 970 }, Vector2 { 100, 50 }, true, 1.0f, 1.0f, 0.0f, false, BLOCK_TYPE_BUSH },
+        { Vector2 { 1250, 270 }, Vector2 { 100, 100 }, true, 1.0f, 1.0f, 0.0f, false, BLOCK_TYPE_BUSH }
     };
 
     //Camera2D camera = { 0 };
@@ -499,12 +505,21 @@ int main(void) {
                         }
                     }
                 }
+                // Аналогично для каменных блоков
                 for (int s = 0; s < NUM_STONE_BLOCKS; s++) {
                     if (stoneBlocks[s].active) {
                         Rectangle rect = { stoneBlocks[s].position.x, stoneBlocks[s].position.y, stoneBlocks[s].size.x, stoneBlocks[s].size.y };
-                        if (CheckCollisionPointRec(bullets[i].position, rect)) {
-                            bullets[i].active = false;
-                            break;
+                        if (CheckCollisionRecs(player, rect)) {
+                            Vector2 blockCenter = { stoneBlocks[s].position.x + stoneBlocks[s].size.x / 2,
+                                                    stoneBlocks[s].position.y + stoneBlocks[s].size.y / 2 };
+                            Vector2 playerCenter = { player.x + player.width / 2, player.y + player.height / 2 };
+                            Vector2 diff = { playerCenter.x - blockCenter.x, playerCenter.y - blockCenter.y };
+                            float length = sqrtf(diff.x * diff.x + diff.y * diff.y);
+                            if (length != 0) {
+                                float pushStrength = 100.0f;
+                                velocity.x += (diff.x / length) * pushStrength;
+                                velocity.y += (diff.y / length) * pushStrength;
+                            }
                         }
                     }
                 }
@@ -582,7 +597,82 @@ int main(void) {
                 }
             }
         }
+        // Проверка столкновений с камнями для первого игрока
+        for (int b = 0; b < NUM_STONE_BLOCKS; b++) {
+            if (stoneBlocks[b].active) {
+                Rectangle stoneRect = { stoneBlocks[b].position.x, stoneBlocks[b].position.y, stoneBlocks[b].size.x, stoneBlocks[b].size.y };
+                Rectangle playerRect = { player.x, player.y, player.width, player.height };
+                if (CheckCollisionRecs(playerRect, stoneRect)) {
+                    // Вычисляем пересечение
+                    float overlapX = 0;
+                    float overlapY = 0;
 
+                    // Центральные точки
+                    Vector2 playerCenter = { player.x + player.width / 2, player.y + player.height / 2 };
+                    Vector2 blockCenter = { stoneBlocks[b].position.x + stoneBlocks[b].size.x / 2, stoneBlocks[b].position.y + stoneBlocks[b].size.y / 2 };
+                    Vector2 diff = { playerCenter.x - blockCenter.x, playerCenter.y - blockCenter.y };
+
+                    // Находим минимальное смещение, чтобы убрать пересечение
+                    float dx = (stoneBlocks[b].size.x / 2 + player.width / 2) - fabsf(diff.x);
+                    float dy = (stoneBlocks[b].size.y / 2 + player.height / 2) - fabsf(diff.y);
+
+                    if (dx < dy) {
+                        // Смещаем по X
+                        if (diff.x > 0) {
+                            player.x += dx;
+                        }
+                        else {
+                            player.x -= dx;
+                        }
+                    }
+                    else {
+                        // Смещаем по Y
+                        if (diff.y > 0) {
+                            player.y += dy;
+                        }
+                        else {
+                            player.y -= dy;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Аналогично для второго игрока
+        for (int b = 0; b < NUM_STONE_BLOCKS; b++) {
+            if (stoneBlocks[b].active) {
+                Rectangle stoneRect = { stoneBlocks[b].position.x, stoneBlocks[b].position.y, stoneBlocks[b].size.x, stoneBlocks[b].size.y };
+                Rectangle playerRect2 = { player2.x, player2.y, player2.width, player2.height };
+                if (CheckCollisionRecs(playerRect2, stoneRect)) {
+                    float overlapX = 0;
+                    float overlapY = 0;
+
+                    Vector2 player2Center = { player2.x + player2.width / 2, player2.y + player2.height / 2 };
+                    Vector2 blockCenter = { stoneBlocks[b].position.x + stoneBlocks[b].size.x / 2, stoneBlocks[b].position.y + stoneBlocks[b].size.y / 2 };
+                    Vector2 diff = { player2Center.x - blockCenter.x, player2.y + player2.height / 2 - blockCenter.y };
+
+                    float dx = (stoneBlocks[b].size.x / 2 + player2.width / 2) - fabsf(diff.x);
+                    float dy = (stoneBlocks[b].size.y / 2 + player2.height / 2) - fabsf(diff.y);
+
+                    if (dx < dy) {
+                        if (diff.x > 0) {
+                            player2.x += dx;
+                        }
+                        else {
+                            player2.x -= dx;
+                        }
+                    }
+                    else {
+                        if (diff.y > 0) {
+                            player2.y += dy;
+                        }
+                        else {
+                            player2.y -= dy;
+                        }
+                    }
+                }
+            }
+        }
         // Обновление позиций игроков
         player.x += velocity.x * deltaTime;
         player.y += velocity.y * deltaTime;
@@ -610,7 +700,7 @@ int main(void) {
                 if (rand() % 1000 < 5) {
                     enemies[i].rotationDirection *= -1;
                 }
-   
+
                 Vector2 newPos = {
                     enemies[i].position.x + enemies[i].velocity.x * deltaTime,
                     enemies[i].position.y + enemies[i].velocity.y * deltaTime
@@ -835,26 +925,36 @@ int main(void) {
         DrawTexturePro(playerTexture, sourceRec, destRec2, origin, rotation2, WHITE);
 
         // Отрисовка кирпичных блоков с уменьшенными размерами
-        int brickTextureSize = 50; // Размер стороны текстуры кирпича
-        int brickSize = 50; // Укажите соответствующий размер вашей текстуры кирпича
-
+        // Размеры текстуры кирпича
+        float scaleFactor = 0.08f; // например, уменьшить вдвое
         for (int b = 0; b < NUM_BRICK_BLOCKS; b++) {
             if (brickBlocks[b].active) {
-                Rectangle sourceRec = { 0, 0, (float)brickSize, (float)brickSize };
+                Rectangle sourceRec = { 0, 0, (float)bricks.width, (float)bricks.height };
                 Rectangle destRec = {
                     brickBlocks[b].position.x,
                     brickBlocks[b].position.y,
-                    brickSize,
-                    brickSize
+                    bricks.width * scaleFactor,
+                    bricks.height * scaleFactor
                 };
-                Vector2 origin = { brickSize / 2.0f, brickSize / 2.0f };
+                Vector2 origin = { (float)(bricks.width * scaleFactor) / 2, (float)(bricks.height * scaleFactor) / 2 };
                 DrawTexturePro(bricks, sourceRec, destRec, origin, 0.0f, WHITE);
             }
         }
 
+        float stoneScale = 0.9f; // уменьшить вдвое
+
         for (int s = 0; s < NUM_STONE_BLOCKS; s++) {
             if (stoneBlocks[s].active) {
-                DrawRectangle(stoneBlocks[s].position.x, stoneBlocks[s].position.y, stoneBlocks[s].size.x, stoneBlocks[s].size.y, RED);
+                int stoneSize = (int)stoneBlocks[s].size.x;
+                Rectangle sourceRec = { 0, 0, (float)stoneTexture.width, (float)stoneTexture.height };
+                Rectangle destRec = {
+                    stoneBlocks[s].position.x,
+                    stoneBlocks[s].position.y,
+                    (float)stoneSize * stoneScale,
+                    (float)stoneSize * stoneScale
+                };
+                Vector2 origin = { 0, 0 };
+                DrawTexturePro(stoneTexture, sourceRec, destRec, origin, 0.0f, WHITE);
             }
         }
 
@@ -913,6 +1013,7 @@ int main(void) {
     UnloadTexture(bricks);
     UnloadTexture(map);
     UnloadTexture(bushTexture);
+    UnloadTexture(stoneTexture);
     UnloadTexture(bulletTexture);
     UnloadTexture(playerTexture);
     CloseWindow();
