@@ -129,6 +129,7 @@ int main(void) {
     Texture2D map = LoadTexture("maps.png");
     Texture2D bushTexture = LoadTexture("kust.png");
     Texture2D stoneTexture = LoadTexture("stone.png");
+    Texture2D enemyTexture = LoadTexture("enemy.png");
     Texture2D bricks = LoadTexture("broke.png");
     DisableCursor();
     SetTargetFPS(60);
@@ -415,9 +416,10 @@ int main(void) {
                     enemies[i].patrolTarget = playerPos;
 
                     if (enemies[i].shootTimer <= 0) {
-                        Vector2 startPos = { enemies[i].position.x + 25, enemies[i].position.y + 25 };
-                        float angle = atan2f(toPlayer.y, toPlayer.x) * RAD2DEG;
-                        SpawnBullet(bullets, startPos, angle, 300.0f, false);
+                        
+                        float angleDeg = atan2f(toPlayer.y, toPlayer.x) * RAD2DEG; // угол в градусах
+                        Vector2 startPos = { enemies[i].position.x + 25, enemies[i].position.y }; // чуть выше центра врага
+                        SpawnBullet(bullets, startPos, angleDeg, 300.0f, false);
                         enemies[i].shootTimer = 2.0f;
                     }
                 }
@@ -813,11 +815,18 @@ int main(void) {
 
                 for (int i = 0; i < NUM_ENEMIES; i++) {
                     if (enemies[i].active) {
-                        Rectangle enemyRect = { enemies[i].position.x, enemies[i].position.y, 50, 50 };
+                        Rectangle destRec = { enemies[i].position.x, enemies[i].position.y, 50, 50 };
+                        Vector2 origin = { 25, 25 }; // центр
+                        DrawTexturePro(enemyTexture, Rectangle { 0, 0, (float)enemyTexture.width, (float)enemyTexture.height }, destRec, origin, enemies[i].rotationAngle, WHITE);
+                    
+                    
+                
 
                         // Проверка столкновения первого игрока
                         // В месте, где проверяете столкновение врага с игроком
-                        if (CheckCollisionRecs(player, enemyRect)) {
+                        Rectangle enemyRect = { enemies[i].position.x, enemies[i].position.y, 50, 50 };
+                        if (CheckCollisionRecs(player, enemyRect))
+                         {
                             printf("Первый игрок столкнулся с врагом! Жизни до: %d\n", playerLives1);
                             playerLives1--;
                             playerHitEnemy1 = true;
@@ -844,7 +853,7 @@ int main(void) {
                         }
 
                         // Проверка столкновения второго игрока
-                        if (CheckCollisionRecs(player2, enemyRect) && !player2HitEnemy1) {
+                        if (CheckCollisionRecs(player, enemyRect) && !player2HitEnemy1) {
                             printf("Второй игрок столкнулся с врагом! Жизни до: %d\n", playerLives2);
                             playerLives2--;
                             player2HitEnemy1 = true;
@@ -948,8 +957,8 @@ int main(void) {
                 int stoneSize = (int)stoneBlocks[s].size.x;
                 Rectangle sourceRec = { 0, 0, (float)stoneTexture.width, (float)stoneTexture.height };
                 Rectangle destRec = {
-                    stoneBlocks[s].position.x,
-                    stoneBlocks[s].position.y,
+                    stoneBlocks[s].position.x - 25,
+                    stoneBlocks[s].position.y - 25,
                     (float)stoneSize * stoneScale,
                     (float)stoneSize * stoneScale
                 };
@@ -990,12 +999,11 @@ int main(void) {
 
         for (int i = 0; i < NUM_ENEMIES; i++) {
             if (enemies[i].active) {
-                Rectangle rect = { enemies[i].position.x, enemies[i].position.y, 50, 50 };
-                Vector2 origin = { 25, 25 };
-                DrawRectanglePro(rect, origin, enemies[i].rotationAngle, DARKGREEN);
+                Rectangle destRec = { enemies[i].position.x, enemies[i].position.y, 50, 50 };
+                Vector2 origin = { 25, 25 }; // центр
+                DrawTexturePro(enemyTexture, Rectangle{ 0, 0, (float)enemyTexture.width, (float)enemyTexture.height }, destRec, origin, enemies[i].rotationAngle, WHITE);
             }
         }
-
         //EndMode2D();
 
         // Отображение жизней каждого игрока
@@ -1015,6 +1023,7 @@ int main(void) {
     UnloadTexture(bushTexture);
     UnloadTexture(stoneTexture);
     UnloadTexture(bulletTexture);
+    UnloadTexture(enemyTexture);
     UnloadTexture(playerTexture);
     CloseWindow();
 
