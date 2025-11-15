@@ -3,6 +3,14 @@
 #include <stdlib.h>
 #include <time.h>
 #include <stdio.h>
+Color LerpColor(Color start, Color end, float t) {
+    return {
+        (unsigned char)(start.r + (end.r - start.r) * t),
+        (unsigned char)(start.g + (end.g - start.g) * t),
+        (unsigned char)(start.b + (end.b - start.b) * t),
+        (unsigned char)(start.a + (end.a - start.a) * t)
+    };
+}
 
 #define MAX_BULLETS 100
 #define NUM_BRICK_BLOCKS 9
@@ -14,12 +22,18 @@
 #define ENEMY_VIEW_RADIUS 300.0f
 #define ENEMY_FIRE_RADIUS 250.0f
 #define ENEMY_PATROL_RADIUS 150.0f
-
+// Объявление глобальных переменных
+int currentAmmoType = 1; // 1 - быстрый, мощный; 2 - медленный, слабый
+float slowEffectTimer = 0.0f; // таймер замедления
+float reloadDurationFast = 2.5f; // стандартный перезаряд
+float reloadDurationSlow = 2.5f; // замедленная перезарядка
 float bulletAngle = 0.0f;
 int enemiesKilled = 0;
 int playerHits = 0;
 int score = 0; // счетчик очков
-
+float reloadTimer1 = 0.0f; // таймер перезарядки для первого игрока
+float reloadTimer2 = 0.0f; // таймер перезарядки для второго игрока
+float reloadDuration = 2.5f; // длительность перезарядки
 typedef struct {
     Vector2 position;
     Vector2 size;
@@ -46,13 +60,15 @@ typedef struct {
     Vector2 size;
     bool active;
 } StoneBlock;
-
 typedef struct {
     Vector2 position;
     Vector2 velocity;
     bool active;
     bool fromPlayer;
+    int damage;           // урон
+    float damageMultiplier; // множитель урона
 } Bullet;
+
 
 typedef enum {
     BLOCK_TYPE_NORMAL,
@@ -92,7 +108,7 @@ typedef struct {
     int rotationDirection;    // направление вращения (1 или -1)
 } EnemyExt;
 
-void SpawnBullet(Bullet bullets[], Vector2 startPos, float angleDeg, float bulletSpeed, bool fromPlayer) {
+void SpawnBullet(Bullet bullets[], Vector2 startPos, float angleDeg, float bulletSpeed, bool fromPlayer, float damageMultiplier, int damage) {
     for (int i = 0; i < MAX_BULLETS; i++) {
         if (!bullets[i].active) {
             bullets[i].active = true;
@@ -101,6 +117,9 @@ void SpawnBullet(Bullet bullets[], Vector2 startPos, float angleDeg, float bulle
             bullets[i].velocity.x = cosf(angleRad) * bulletSpeed;
             bullets[i].velocity.y = sinf(angleRad) * bulletSpeed;
             bullets[i].fromPlayer = fromPlayer;
+            // Можно добавить свойство damage и damageMultiplier, если нужно
+            // Например, через расширенную структуру Bullet
+            // Но для этого потребуется изменить структуру Bullet
             break;
         }
     }
@@ -112,6 +131,7 @@ Vector2 GetRandomPatrolTarget(Vector2 currentPos, float radius) {
 }
 
 int main(void) {
+   
     float rotation = 0.0f;
     float rotation2 = 0.0f; // вращение второго игрока
     int playerLives1 = 150; // жизни первого игрока
@@ -119,10 +139,10 @@ int main(void) {
     int points = 0; // счетчик очков
     srand((unsigned int)time(NULL));
     const int screenWidth = 1400;
-    const int screenHeight = 1000;
+    const int screenHeight = 900;
     const int mapWidth = 1400;
-    const int mapHeight = 1000;
-
+    const int mapHeight = 900;
+    const int scalle = 0.05f;
     InitWindow(screenWidth, screenHeight, "AI Enemies");
     Texture2D playerTexture = LoadTexture("tanks.png");
     Texture2D bulletTexture = LoadTexture("pull.png");
@@ -130,7 +150,8 @@ int main(void) {
     Texture2D bushTexture = LoadTexture("kust.png");
     Texture2D stoneTexture = LoadTexture("stone.png");
     Texture2D enemyTexture = LoadTexture("enemy.png");
-    Texture2D bricks = LoadTexture("broke.png");
+    Texture2D bricks = LoadTexture("brick.png");
+    Texture2D bulletTextureType2 = LoadTexture("22.png");
     DisableCursor();
     SetTargetFPS(60);
 
@@ -208,15 +229,80 @@ int main(void) {
     }
 
     while (!WindowShouldClose()) {
+        // В начале цикла, перед обработкой ввода
+        bool isBulletActive = false;
+        for (int i = 0; i < MAX_BULLETS; i++) {
+            if (bullets[i].active) {
+                isBulletActive = true;
+                break;
+            }
+        }
+
+        // Обработка смены типа
+        if (!isBulletActive) {
+            if (IsKeyPressed(KEY_ONE)) {
+                currentAmmoType = 1;
+            }
+            if (IsKeyPressed(KEY_TWO)) {
+                currentAmmoType = 2;
+            }
+        }
         bool playerHitEnemy1 = false;
         bool player2HitEnemy1 = false;
         float deltaTime = GetFrameTime();
+        // В начале цикла
+        if (slowEffectTimer > 0.0f) {
+            slowEffectTimer -= deltaTime;
+            if (slowEffectTimer <= 0.0f) {
+                // Восстановить стандартные значения
+                reloadDuration = reloadDurationFast; // или первоначальное значение
+            }
+            else {
+                // В процессе замедления, можно дополнительно уменьшать скорость стрельбы или другие параметры
+            }
+        }
         //camera.target = Vector2{ player.x + player.width / 2, player.y + player.height / 2 };
         //camera.offset = Vector2{ (float)screenWidth / 2, (float)screenHeight / 2 };
         //camera.zoom = 1.0f;
-
+        // Обновление таймеров перезарядки
+        if (reloadTimer1 > 0.0f) {
+            reloadTimer1 -= deltaTime;
+            if (reloadTimer1 < 0.0f) reloadTimer1 = 0.0f;
+        }
+        if (reloadTimer2 > 0.0f) {
+            reloadTimer2 -= deltaTime;
+            if (reloadTimer2 < 0.0f) reloadTimer2 = 0.0f;
+        }
         float radians = DEG2RAD * rotation;
+        // Обработка стрельбы для первого игрока
+        // В начале основного цикла (внутри while), для стрельбы
+        if (IsKeyDown(KEY_ENTER) && reloadTimer1 == 0.0f) {
+            Vector2 startPos1 = { player.x + player.width / 2, player.y + player.height / 2 };
+            Vector2 startPos2 = { player.x + player.width / 2 + 100, player.y + player.height + 70  };
+            if (currentAmmoType == 1) {
+                // Быстрый снаряд
+                SpawnBullet(bullets, startPos1, rotation, 600.0f, true, 1.0f, 10);
+            }
+            else {
+                // Медленный, слабый снаряд
+                SpawnBullet(bullets, startPos2, rotation, 300.0f, true, 0.5f, 5);
+            }
+            // Установка таймера перезарядки
+            reloadTimer1 = (currentAmmoType == 1) ? reloadDurationFast : reloadDurationSlow;
+        }
 
+
+        // Аналогично для второго игрока
+        if (IsKeyDown(KEY_RIGHT_SHIFT) && reloadTimer2 == 0.0f) {
+            Vector2 startPos = { player2.x + player2.width / 2, player2.y + player2.height / 2 };
+            if (currentAmmoType == 1) {
+                SpawnBullet(bullets, startPos, rotation2, 600.0f, false, 1.0f, 10);
+            }
+            else {
+                SpawnBullet(bullets, startPos, rotation2, 300.0f, false, 0.5f, 5);
+            }
+            reloadTimer2 = (currentAmmoType == 1) ? reloadDurationFast : reloadDurationSlow;
+        }
         // Управление первым игроком
         bool rotateLeft = IsKeyDown(KEY_A);
         bool rotateRight = IsKeyDown(KEY_D);
@@ -229,30 +315,14 @@ int main(void) {
         bool moveForward2 = IsKeyDown(KEY_UP);
         bool moveBackward2 = IsKeyDown(KEY_DOWN);
 
-        // Обработка стрельбы для первого
-        static bool prevShoot1 = false;
-        bool shoot1 = IsKeyDown(KEY_ENTER);
-        if (shoot1 && !prevShoot1) {
-            Vector2 startPos = { player.x + player.width / 2, player.y + player.height / 2 };
-            SpawnBullet(bullets, startPos, rotation, 600.0f, true);
-        }
-        prevShoot1 = shoot1;
 
-        // Обработка стрельбы для второго
-        static bool prevShoot2 = false;
-        bool shoot2 = IsKeyDown(KEY_RIGHT_SHIFT);
-        if (shoot2 && !prevShoot2) {
-            Vector2 startPos = { player2.x + player2.width / 2, player2.y + player2.height / 2 };
-            SpawnBullet(bullets, startPos, rotation2, 600.0f, false);
-        }
-        prevShoot2 = shoot2;
 
         // Перед обработкой ввода проверяем наличие геймпадов
         int gamepad1 = 0;
         int gamepad2 = 1;
         bool gp1Available = IsGamepadAvailable(gamepad1);
         bool gp2Available = IsGamepadAvailable(gamepad2);
-
+        /*
         // Управление через джойстик для первого
         if (gp1Available) {
             float axisX = GetGamepadAxisMovement(gamepad1, GAMEPAD_AXIS_LEFT_X);
@@ -288,7 +358,7 @@ int main(void) {
                 Vector2 startPos = { player2.x + player2.width / 2, player2.y + player2.height / 2 };
                 SpawnBullet(bullets, startPos, rotation2, 600.0f, false);
             }
-        }
+        }*/
 
         // Вращение стрелками
         if (rotateLeft2) rotation2 -= rotationSpeed * deltaTime;
@@ -416,10 +486,10 @@ int main(void) {
                     enemies[i].patrolTarget = playerPos;
 
                     if (enemies[i].shootTimer <= 0) {
-                        
+
                         float angleDeg = atan2f(toPlayer.y, toPlayer.x) * RAD2DEG; // угол в градусах
                         Vector2 startPos = { enemies[i].position.x + 25, enemies[i].position.y }; // чуть выше центра врага
-                        SpawnBullet(bullets, startPos, angleDeg, 300.0f, false);
+                        SpawnBullet(bullets, startPos, angleDeg, 300.0f, false, 1, 10);
                         enemies[i].shootTimer = 2.0f;
                     }
                 }
@@ -734,7 +804,7 @@ int main(void) {
                     if (enemies[i].shootTimer <= 0) {
                         Vector2 startPos = { enemies[i].position.x + 25, enemies[i].position.y + 25 };
                         float angle = atan2f(toPlayer.y, toPlayer.x) * RAD2DEG;
-                        SpawnBullet(bullets, startPos, angle, 300.0f, false);
+                        SpawnBullet(bullets, startPos, angle, 300.0f, false, 1, 10);
                         enemies[i].shootTimer = 2.0f;
                     }
                 }
@@ -817,16 +887,16 @@ int main(void) {
                     if (enemies[i].active) {
                         Rectangle destRec = { enemies[i].position.x, enemies[i].position.y, 50, 50 };
                         Vector2 origin = { 25, 25 }; // центр
-                        DrawTexturePro(enemyTexture, Rectangle { 0, 0, (float)enemyTexture.width, (float)enemyTexture.height }, destRec, origin, enemies[i].rotationAngle, WHITE);
-                    
-                    
-                
+                        DrawTexturePro(enemyTexture, Rectangle{ 0, 0, (float)enemyTexture.width, (float)enemyTexture.height }, destRec, origin, enemies[i].rotationAngle, WHITE);
+
+
+
 
                         // Проверка столкновения первого игрока
                         // В месте, где проверяете столкновение врага с игроком
                         Rectangle enemyRect = { enemies[i].position.x, enemies[i].position.y, 50, 50 };
                         if (CheckCollisionRecs(player, enemyRect))
-                         {
+                        {
                             printf("Первый игрок столкнулся с врагом! Жизни до: %d\n", playerLives1);
                             playerLives1--;
                             playerHitEnemy1 = true;
@@ -893,19 +963,25 @@ int main(void) {
                     // Враговые пули по игрокам
                     Rectangle rectPlayer1 = { player.x, player.y, player.width, player.height };
                     Rectangle rectPlayer2 = { player2.x, player2.y, player2.width, player2.height };
+                    // В обработке попаданий по игрокам
                     if (CheckCollisionPointRec(bullets[i].position, rectPlayer1)) {
                         printf("Пуля врага попала в первого игрока! Координаты пули: (%.2f, %.2f)\n", bullets[i].position.x, bullets[i].position.y);
                         printf("До попадания: Жизни первого игрока: %d\n", playerLives1);
                         bullets[i].active = false;
                         playerLives1--;
-                        printf("После попадания: Жизни первого игрока: %d\n", playerLives1);
+                        // Эффект замедления
+                        slowEffectTimer = 3.0f; // например, 3 секунды замедления
+                        // Замедляем перезарядку
+                        reloadDuration = 5.0f; // например, увеличиваем на время замедления
                     }
                     if (CheckCollisionPointRec(bullets[i].position, rectPlayer2)) {
                         printf("Пуля врага попала во второго игрока! Координаты пули: (%.2f, %.2f)\n", bullets[i].position.x, bullets[i].position.y);
                         printf("До попадания: Жизни второго игрока: %d\n", playerLives2);
                         bullets[i].active = false;
                         playerLives2--;
-                        printf("После попадания: Жизни второго игрока: %d\n", playerLives2);
+                        slowEffectTimer = 3.0f; // например, 3 секунды замедления
+                        // Замедляем перезарядку
+                        reloadDuration = 5.0f; // например, увеличиваем на время замедления
                     }
                 }
             }
@@ -927,7 +1003,57 @@ int main(void) {
         Rectangle destRec = { player.x, player.y, player.width, player.height };
         Vector2 origin = { player.width / 2, player.height / 2 };
         Rectangle destRec2 = { player2.x, player2.y, player2.width, player2.height };
+        // Отображение таймеров перезарядки
+        // В цикле рендеринга
+        // Для первого игрока
+        if (reloadTimer1 > 0.0f) {
+            float t = 1.0f - (reloadTimer1 / reloadDuration); // прогресс от 0 до 1
+            Color color;
+            if (t < 0.33f) {
+                // от красного к оранжевому
+                float localT = t / 0.33f; // 0..1
+                color = LerpColor(RED, ORANGE, localT);
+            }
+            else if (t < 0.66f) {
+                // от оранжевого к желтому
+                float localT = (t - 0.33f) / 0.33f;
+                color = LerpColor(ORANGE, YELLOW, localT);
+            }
+            else {
+                // от желтого к зеленому
+                float localT = (t - 0.66f) / 0.34f; // чуть больше
+                color = LerpColor(YELLOW, GREEN, localT);
+            }
+            DrawText(TextFormat("Player 1 Reload: %.1f", reloadTimer1), 10, 290, 20, color);
+        }
+        else {
+            DrawText("Player 1 Ready", 10, 290, 20, GREEN);
+        }
 
+        // Для второго игрока
+        if (reloadTimer2 > 0.0f) {
+            float t = 1.0f - (reloadTimer2 / reloadDuration);
+            Color color;
+            if (t < 0.33f) {
+                // от красного к оранжевому
+                float localT = t / 0.33f;
+                color = LerpColor(RED, ORANGE, localT);
+            }
+            else if (t < 0.66f) {
+                // от оранжевого к желтому
+                float localT = (t - 0.33f) / 0.33f;
+                color = LerpColor(ORANGE, YELLOW, localT);
+            }
+            else {
+                // от желтого к зеленому
+                float localT = (t - 0.66f) / 0.34f;
+                color = LerpColor(YELLOW, GREEN, localT);
+            }
+            DrawText(TextFormat("Player 2 Reload: %.1f", reloadTimer2), 10, 320, 20, color);
+        }
+        else {
+            DrawText("Player 2 Ready", 10, 320, 20, GREEN);
+        }
         // Отрисовка первого игрока
         DrawTexturePro(playerTexture, sourceRec, destRec, origin, rotation, WHITE);
         // Отрисовка второго игрока стрелками
@@ -979,23 +1105,24 @@ int main(void) {
 
 
 
-        // Пуль
-        float bulletAngle = 0.0f;
-        for (int i = 0; i < MAX_BULLETS; i++) {
-            if (bullets[i].active) {
-                bulletAngle = atan2f(bullets[i].velocity.y, bullets[i].velocity.x) * RAD2DEG;
-                DrawTextureEx(
-                    bulletTexture,
-                    Vector2{
-                        bullets[i].position.x - bulletTexture.width / 10,
-                        bullets[i].position.y - bulletTexture.height / 10
-                    },
-                    bulletAngle,
-                    0.2f,
-                    WHITE
-                );
-            }
-        }
+       for (int i = 0; i < MAX_BULLETS; i++) {
+    if (bullets[i].active) {
+        float bulletAngle = atan2f(bullets[i].velocity.y, bullets[i].velocity.x) * RAD2DEG;
+        float scale = (currentAmmoType == 2) ? 0.025f : 0.2f; // масштаб для пуль второго типа
+        Texture2D textureToDraw = (currentAmmoType == 2) ? bulletTextureType2 : bulletTexture; // выбираем текстуру
+
+        DrawTextureEx(
+            textureToDraw,
+            Vector2{
+                bullets[i].position.x - textureToDraw.width / 10,
+                bullets[i].position.y - textureToDraw.height / 10
+            },
+            bulletAngle,
+            scale,
+            WHITE
+        );
+    }
+}
 
         for (int i = 0; i < NUM_ENEMIES; i++) {
             if (enemies[i].active) {
@@ -1014,6 +1141,7 @@ int main(void) {
         DrawText(TextFormat("Score: %d", score), 10, 260, 20, DARKGRAY);
 
         DrawFPS(screenWidth - 90, 10);
+        DrawText(TextFormat("Patron type: %d", currentAmmoType), 10, screenHeight - 30, 20, DARKGRAY);
         EndDrawing();
 
     }
@@ -1036,6 +1164,8 @@ int main(void) {
         DrawText("Game Over", screenWidth / 2 - 80, screenHeight / 2 - 20, 40, RED);
         EndDrawing();
     }
+    // В конце цикла перед EndDrawing()
+    
     EndDrawing();
 
     return 0;
