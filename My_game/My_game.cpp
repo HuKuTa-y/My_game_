@@ -131,7 +131,7 @@ Vector2 GetRandomPatrolTarget(Vector2 currentPos, float radius) {
 }
 
 int main(void) {
-   
+
     float rotation = 0.0f;
     float rotation2 = 0.0f; // вращение второго игрока
     int playerLives1 = 150; // жизни первого игрока
@@ -278,7 +278,7 @@ int main(void) {
         // В начале основного цикла (внутри while), для стрельбы
         if (IsKeyDown(KEY_ENTER) && reloadTimer1 == 0.0f) {
             Vector2 startPos1 = { player.x + player.width / 2, player.y + player.height / 2 };
-            Vector2 startPos2 = { player.x + player.width / 2 + 100, player.y + player.height + 70  };
+            Vector2 startPos2 = { player.x + player.width / 2 + 100, player.y + player.height + 70 };
             if (currentAmmoType == 1) {
                 // Быстрый снаряд
                 SpawnBullet(bullets, startPos1, rotation, 600.0f, true, 1.0f, 10);
@@ -294,12 +294,17 @@ int main(void) {
 
         // Аналогично для второго игрока
         if (IsKeyDown(KEY_RIGHT_SHIFT) && reloadTimer2 == 0.0f) {
-            Vector2 startPos = { player2.x + player2.width / 2, player2.y + player2.height / 2 };
+            Vector2 startPos1 = { player2.x + player2.width / 2, player2.y + player2.height / 2 };
+            Vector2 startPos2 = { player2.x + player2.width / 2 + 100, player2.y + player2.height + 70 };
+
+            // Можно выбрать, какую позицию использовать, например, по условию
+            Vector2 spawnPos = startPos1; // или startPos2, в зависимости от логики
+
             if (currentAmmoType == 1) {
-                SpawnBullet(bullets, startPos, rotation2, 600.0f, false, 1.0f, 10);
+                SpawnBullet(bullets, spawnPos, rotation2, 600.0f, true, 1.0f, 10);
             }
             else {
-                SpawnBullet(bullets, startPos, rotation2, 300.0f, false, 0.5f, 5);
+                SpawnBullet(bullets, startPos2, rotation2, 300.0f, true, 0.5f, 5);
             }
             reloadTimer2 = (currentAmmoType == 1) ? reloadDurationFast : reloadDurationSlow;
         }
@@ -577,6 +582,33 @@ int main(void) {
                         }
                     }
                 }
+
+                // Проверка столкновений пуль между игроками
+       // Пуля от первого игрока по второму
+                // Проверка столкновений пуль между игроками
+// Пуля от первого игрока по второму
+if (bullets[i].active && bullets[i].fromPlayer) {
+    Rectangle rectPlayer2 = { player2.x, player2.y, player2.width, player2.height };
+    if (CheckCollisionPointRec(bullets[i].position, rectPlayer2)) {
+        bullets[i].active = false;
+        int damage = (int)(bullets[i].damage * bullets[i].damageMultiplier);
+        playerLives2 -= damage;
+        printf("Пуля первого игрока попала во второго! Урон: %d, Жизни второго: %d\n", damage, playerLives2);
+    }
+}
+// Пуля от второго игрока по первому
+if (bullets[i].active && !bullets[i].fromPlayer) {
+    Rectangle rectPlayer1 = { player.x, player.y, player.width, player.height };
+    if (CheckCollisionPointRec(bullets[i].position, rectPlayer1)) {
+        bullets[i].active = false;
+        int damage = (int)(bullets[i].damage * bullets[i].damageMultiplier);
+        playerLives1 -= damage;
+        printf("Пуля второго игрока попала в первого! Урон: %d, Жизни первого: %d\n", damage, playerLives1);
+    }
+}
+            
+        
+
                 // Аналогично для каменных блоков
                 for (int s = 0; s < NUM_STONE_BLOCKS; s++) {
                     if (stoneBlocks[s].active) {
@@ -804,7 +836,8 @@ int main(void) {
                     if (enemies[i].shootTimer <= 0) {
                         Vector2 startPos = { enemies[i].position.x + 25, enemies[i].position.y + 25 };
                         float angle = atan2f(toPlayer.y, toPlayer.x) * RAD2DEG;
-                        SpawnBullet(bullets, startPos, angle, 300.0f, false, 1, 10);
+                        SpawnBullet(bullets, startPos, angle, 300.0f, false
+                            , 1, 10);
                         enemies[i].shootTimer = 2.0f;
                     }
                 }
@@ -871,6 +904,27 @@ int main(void) {
                         }
                     }
                 }
+
+                // Проверка попаданий пуль в другого игрока
+        // Пуля от первого игрока по второму
+                if (bullets[i].active && bullets[i].fromPlayer) {
+                    Rectangle rectPlayer2 = { player2.x, player2.y, player2.width, player2.height };
+                    if (CheckCollisionPointRec(bullets[i].position, rectPlayer2)) {
+                        bullets[i].active = false;
+                        playerLives2--;
+                        printf("Пуля первого игрока попала во второго! Жизни второго: %d\n", playerLives2);
+                    }
+                }
+                // Пуля от второго игрока по первому
+                if (bullets[i].active && !bullets[i].fromPlayer) {
+                    Rectangle rectPlayer1 = { player.x, player.y, player.width, player.height };
+                    if (CheckCollisionPointRec(bullets[i].position, rectPlayer1)) {
+                        bullets[i].active = false;
+                        playerLives1--;
+                        printf("Пуля второго игрока попала в первого! Жизни первого: %d\n", playerLives1);
+                    }
+                }
+
                 for (int s = 0; s < NUM_STONE_BLOCKS; s++) {
                     if (stoneBlocks[s].active) {
                         Rectangle rect = { stoneBlocks[s].position.x, stoneBlocks[s].position.y, stoneBlocks[s].size.x, stoneBlocks[s].size.y };
@@ -1105,24 +1159,24 @@ int main(void) {
 
 
 
-       for (int i = 0; i < MAX_BULLETS; i++) {
-    if (bullets[i].active) {
-        float bulletAngle = atan2f(bullets[i].velocity.y, bullets[i].velocity.x) * RAD2DEG;
-        float scale = (currentAmmoType == 2) ? 0.025f : 0.2f; // масштаб для пуль второго типа
-        Texture2D textureToDraw = (currentAmmoType == 2) ? bulletTextureType2 : bulletTexture; // выбираем текстуру
+        for (int i = 0; i < MAX_BULLETS; i++) {
+            if (bullets[i].active) {
+                float bulletAngle = atan2f(bullets[i].velocity.y, bullets[i].velocity.x) * RAD2DEG;
+                float scale = (currentAmmoType == 2) ? 0.025f : 0.2f; // масштаб для пуль второго типа
+                Texture2D textureToDraw = (currentAmmoType == 2) ? bulletTextureType2 : bulletTexture; // выбираем текстуру
 
-        DrawTextureEx(
-            textureToDraw,
-            Vector2{
-                bullets[i].position.x - textureToDraw.width / 10,
-                bullets[i].position.y - textureToDraw.height / 10
-            },
-            bulletAngle,
-            scale,
-            WHITE
-        );
-    }
-}
+                DrawTextureEx(
+                    textureToDraw,
+                    Vector2{
+                        bullets[i].position.x - textureToDraw.width / 10,
+                        bullets[i].position.y - textureToDraw.height / 10
+                    },
+                    bulletAngle,
+                    scale,
+                    WHITE
+                );
+            }
+        }
 
         for (int i = 0; i < NUM_ENEMIES; i++) {
             if (enemies[i].active) {
@@ -1165,7 +1219,7 @@ int main(void) {
         EndDrawing();
     }
     // В конце цикла перед EndDrawing()
-    
+
     EndDrawing();
 
     return 0;
