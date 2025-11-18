@@ -11,11 +11,47 @@ Color LerpColor(Color start, Color end, float t) {
         (unsigned char)(start.a + (end.a - start.a) * t)
     };
 }
+bool CheckLineRectIntersection(Vector2 start, Vector2 end, Rectangle rec) {
+    // Координаты вершин прямоугольника
+    Vector2 rectPoints[4] = {
+        { rec.x, rec.y }, // левый верхний
+        { rec.x + rec.width, rec.y }, // правый верхний
+        { rec.x + rec.width, rec.y + rec.height }, // правый нижний
+        { rec.x, rec.y + rec.height } // левый нижний
+    };
 
+    // Проверка пересечения линии с каждым краем прямоугольника
+    for (int i = 0; i < 4; i++) {
+        Vector2 p1 = rectPoints[i];
+        Vector2 p2 = rectPoints[(i + 1) % 4];
+
+        // Проверяем пересечение линий (start-end) и (p1-p2)
+        float s1_x = start.x;
+        float s1_y = start.y;
+        float s2_x = end.x;
+        float s2_y = end.y;
+
+        float s3_x = p1.x;
+        float s3_y = p1.y;
+        float s4_x = p2.x;
+        float s4_y = p2.y;
+
+        float denom = (s4_y - s3_y) * (s2_x - s1_x) - (s4_x - s3_x) * (s2_y - s1_y);
+        if (denom == 0) continue; // линии параллельны
+
+        float s = ((s4_x - s3_x) * (s1_y - s3_y) - (s4_y - s3_y) * (s1_x - s3_x)) / denom;
+        float t = ((s2_x - s1_x) * (s1_y - s3_y) - (s2_y - s1_y) * (s1_x - s3_x)) / denom;
+
+        if (s >= 0 && s <= 1 && t >= 0 && t <= 1) {
+            return true; // линии пересекаются
+        }
+    }
+    return false; // пересечения нет
+}
 #define MAX_BULLETS 100
 #define NUM_BRICK_BLOCKS 9
 #define NUM_STONE_BLOCKS 4
-#define NUM_BUSHES 6
+#define NUM_BUSHES 13
 #define NUM_ENEMIES 3
 #define TRANSITION_DURATION 2.0f
 #define ENEMY_SPEED 100.0f
@@ -134,8 +170,8 @@ int main(void) {
 
     float rotation = 0.0f;
     float rotation2 = 0.0f; // вращение второго игрока
-    int playerLives1 = 150; // жизни первого игрока
-    int playerLives2 = 500; // жизни второго игрока
+    int playerLives1 = 20; // жизни первого игрока
+    int playerLives2 = 20; // жизни второго игрока
     int points = 0; // счетчик очков
     srand((unsigned int)time(NULL));
     const int screenWidth = 1400;
@@ -149,8 +185,8 @@ int main(void) {
     Texture2D map = LoadTexture("maps.png");
     Texture2D bushTexture = LoadTexture("kust.png");
     Texture2D stoneTexture = LoadTexture("stone.png");
-    Texture2D enemyTexture = LoadTexture("enemy.png");
-    Texture2D bricks = LoadTexture("brick.png");
+    Texture2D enemyTexture = LoadTexture("e.png");
+    Texture2D bricks = LoadTexture("broke.png");
     Texture2D bulletTextureType2 = LoadTexture("22.png");
     DisableCursor();
     SetTargetFPS(60);
@@ -206,7 +242,14 @@ int main(void) {
         { Vector2 { 600, 850 }, Vector2 { 100, 100 }, true, 1.0f, 1.0f, 0.0f, false, BLOCK_TYPE_BUSH },
         { Vector2 { 900, 650 }, Vector2 { 80, 80 }, true, 1.0f, 1.0f, 0.0f, false, BLOCK_TYPE_BUSH },
         { Vector2 { 1250, 970 }, Vector2 { 100, 50 }, true, 1.0f, 1.0f, 0.0f, false, BLOCK_TYPE_BUSH },
-        { Vector2 { 1250, 270 }, Vector2 { 100, 100 }, true, 1.0f, 1.0f, 0.0f, false, BLOCK_TYPE_BUSH }
+        { Vector2 { 1250, 270 }, Vector2 { 100, 100 }, true, 1.0f, 1.0f, 0.0f, false, BLOCK_TYPE_BUSH },
+        { Vector2 { 1250, 580}, Vector2 { 100, 100 }, true, 1.0f, 1.0f, 0.0f, false, BLOCK_TYPE_BUSH },
+    { Vector2 { 700, 950 }, Vector2 { 100, 100 }, true, 1.0f, 1.0f, 0.0f, false, BLOCK_TYPE_BUSH },
+    { Vector2 { 1100, 50}, Vector2 { 100, 100 }, true, 1.0f, 1.0f, 0.0f, false, BLOCK_TYPE_BUSH },
+    { Vector2 { 230, 290 }, Vector2 { 100, 100 }, true, 1.0f, 1.0f, 0.0f, false, BLOCK_TYPE_BUSH },
+    { Vector2 { 900, 900 }, Vector2 { 100, 100 }, true, 1.0f, 1.0f, 0.0f, false, BLOCK_TYPE_BUSH },
+    { Vector2 { 720, 100}, Vector2 { 100, 100 }, true, 1.0f, 1.0f, 0.0f, false, BLOCK_TYPE_BUSH },
+    { Vector2 { 1100, 800 }, Vector2 { 100, 100 }, true, 1.0f, 1.0f, 0.0f, false, BLOCK_TYPE_BUSH },
     };
 
     //Camera2D camera = { 0 };
@@ -276,36 +319,19 @@ int main(void) {
         float radians = DEG2RAD * rotation;
         // Обработка стрельбы для первого игрока
         // В начале основного цикла (внутри while), для стрельбы
+        // Для первого игрока
         if (IsKeyDown(KEY_ENTER) && reloadTimer1 == 0.0f) {
-            Vector2 startPos1 = { player.x + player.width / 2, player.y + player.height / 2 };
-            Vector2 startPos2 = { player.x + player.width / 2 + 100, player.y + player.height + 70 };
-            if (currentAmmoType == 1) {
-                // Быстрый снаряд
-                SpawnBullet(bullets, startPos1, rotation, 600.0f, true, 1.0f, 10);
-            }
-            else {
-                // Медленный, слабый снаряд
-                SpawnBullet(bullets, startPos2, rotation, 300.0f, true, 0.5f, 5);
-            }
-            // Установка таймера перезарядки
+            Vector2 startPos = { player.x, player.y }; // верхний левый угол первого игрока
+            float angleDeg = rotation; // например, вправо
+            SpawnBullet(bullets, startPos, angleDeg, 600.0f, true, 1.0f, 10);
             reloadTimer1 = (currentAmmoType == 1) ? reloadDurationFast : reloadDurationSlow;
         }
 
-
-        // Аналогично для второго игрока
+        // Для второго игрока
         if (IsKeyDown(KEY_RIGHT_SHIFT) && reloadTimer2 == 0.0f) {
-            Vector2 startPos1 = { player2.x + player2.width / 2, player2.y + player2.height / 2 };
-            Vector2 startPos2 = { player2.x + player2.width / 2 + 100, player2.y + player2.height + 70 };
-
-            // Можно выбрать, какую позицию использовать, например, по условию
-            Vector2 spawnPos = startPos1; // или startPos2, в зависимости от логики
-
-            if (currentAmmoType == 1) {
-                SpawnBullet(bullets, spawnPos, rotation2, 600.0f, true, 1.0f, 10);
-            }
-            else {
-                SpawnBullet(bullets, startPos2, rotation2, 300.0f, true, 0.5f, 5);
-            }
+            Vector2 startPos = { player2.x, player2.y }; // верхний левый угол второго игрока
+            float angleDeg = rotation2; // тоже вправо
+            SpawnBullet(bullets, startPos, angleDeg, 600.0f, true, 1.0f, 10);
             reloadTimer2 = (currentAmmoType == 1) ? reloadDurationFast : reloadDurationSlow;
         }
         // Управление первым игроком
@@ -327,43 +353,7 @@ int main(void) {
         int gamepad2 = 1;
         bool gp1Available = IsGamepadAvailable(gamepad1);
         bool gp2Available = IsGamepadAvailable(gamepad2);
-        /*
-        // Управление через джойстик для первого
-        if (gp1Available) {
-            float axisX = GetGamepadAxisMovement(gamepad1, GAMEPAD_AXIS_LEFT_X);
-            float axisY = GetGamepadAxisMovement(gamepad1, GAMEPAD_AXIS_LEFT_Y);
-            if (fabsf(axisX) > 0.2f) {
-                rotation += axisX * rotationSpeed * deltaTime;
-            }
-            if (fabsf(axisY) > 0.2f) {
-                float dirX = cosf(DEG2RAD * rotation);
-                float dirY = sinf(DEG2RAD * rotation);
-                velocity.x += dirX * (-axisY) * acceleration * deltaTime;
-                velocity.y += dirY * (-axisY) * acceleration * deltaTime;
-            }
-            if (IsGamepadButtonDown(gamepad1, GAMEPAD_BUTTON_RIGHT_FACE_DOWN)) {
-                Vector2 startPos = { player.x + player.width / 2, player.y + player.height / 2 };
-                SpawnBullet(bullets, startPos, rotation, 600.0f, true);
-            }
-        }
-        // Управление через джойстик для второго
-        if (gp2Available) {
-            float axisX2 = GetGamepadAxisMovement(gamepad2, GAMEPAD_AXIS_LEFT_X);
-            float axisY2 = GetGamepadAxisMovement(gamepad2, GAMEPAD_AXIS_LEFT_Y);
-            if (fabsf(axisX2) > 0.2f) {
-                rotation2 += axisX2 * rotationSpeed * deltaTime;
-            }
-            if (fabsf(axisY2) > 0.2f) {
-                float dirX = cosf(DEG2RAD * rotation2);
-                float dirY = sinf(DEG2RAD * rotation2);
-                velocity2.x += dirX * (-axisY2) * acceleration * deltaTime;
-                velocity2.y += dirY * (-axisY2) * acceleration * deltaTime;
-            }
-            if (IsGamepadButtonDown(gamepad2, GAMEPAD_BUTTON_RIGHT_FACE_DOWN)) {
-                Vector2 startPos = { player2.x + player2.width / 2, player2.y + player2.height / 2 };
-                SpawnBullet(bullets, startPos, rotation2, 600.0f, false);
-            }
-        }*/
+
 
         // Вращение стрелками
         if (rotateLeft2) rotation2 -= rotationSpeed * deltaTime;
@@ -425,6 +415,8 @@ int main(void) {
         player2.x += velocity2.x * deltaTime;
         player2.y += velocity2.y * deltaTime;
 
+
+
         // Ограничения границ для первого
         if (player.x < 0) { player.x = 0; velocity.x = -velocity.x; }
         if (player.x + player.width > mapWidth) { player.x = mapWidth - player.width; velocity.x = -velocity.x; }
@@ -438,83 +430,7 @@ int main(void) {
         if (player2.y + player2.height > mapHeight) { player2.y = mapHeight - player2.height; velocity2.y = -velocity2.y; }
 
         // --- Обновление врагов --- //
-        for (int i = 0; i < NUM_ENEMIES; i++) {
-            if (enemies[i].active) {
-                // Вращение врага
-                enemies[i].rotationAngle += enemies[i].rotationDirection * enemies[i].rotationSpeed * deltaTime;
-                if (enemies[i].rotationAngle > 360) enemies[i].rotationAngle -= 360;
-                if (enemies[i].rotationAngle < 0) enemies[i].rotationAngle += 360;
 
-                // Иногда менять направление вращения
-                if (rand() % 1000 < 5) {
-                    enemies[i].rotationDirection *= -1;
-                }
-
-                // Обновление позиции на основе текущего velocity
-                enemies[i].position.x += enemies[i].velocity.x * deltaTime;
-                enemies[i].position.y += enemies[i].velocity.y * deltaTime;
-
-                // Проверка границ и отражение
-                bool changedDirection = false;
-                if (enemies[i].position.x < 0) {
-                    enemies[i].position.x = 0;
-                    enemies[i].velocity.x = -enemies[i].velocity.x;
-                    changedDirection = true;
-                }
-                if (enemies[i].position.x > mapWidth - 50) {
-                    enemies[i].position.x = mapWidth - 50;
-                    enemies[i].velocity.x = -enemies[i].velocity.x;
-                    changedDirection = true;
-                }
-                if (enemies[i].position.y < 0) {
-                    enemies[i].position.y = 0;
-                    enemies[i].velocity.y = -enemies[i].velocity.y;
-                    changedDirection = true;
-                }
-                if (enemies[i].position.y > mapHeight - 50) {
-                    enemies[i].position.y = mapHeight - 50;
-                    enemies[i].velocity.y = -enemies[i].velocity.y;
-                    changedDirection = true;
-                }
-
-                // Если враг повернул (отражение или смена цели), то можно чуть изменить rotation для плавности
-
-                // Стрельба по игроку
-                Vector2 playerPos = { player.x + player.width / 2, player.y + player.height / 2 };
-                Vector2 toPlayer = { playerPos.x - enemies[i].position.x, playerPos.y - enemies[i].position.y };
-                float distToPlayer = sqrtf(toPlayer.x * toPlayer.x + toPlayer.y * toPlayer.y);
-
-                enemies[i].shootTimer -= deltaTime;
-
-                if (distToPlayer <= ENEMY_VIEW_RADIUS) {
-                    enemies[i].hasTarget = true;
-                    enemies[i].patrolTarget = playerPos;
-
-                    if (enemies[i].shootTimer <= 0) {
-
-                        float angleDeg = atan2f(toPlayer.y, toPlayer.x) * RAD2DEG; // угол в градусах
-                        Vector2 startPos = { enemies[i].position.x + 25, enemies[i].position.y }; // чуть выше центра врага
-                        SpawnBullet(bullets, startPos, angleDeg, 300.0f, false, 1, 10);
-                        enemies[i].shootTimer = 2.0f;
-                    }
-                }
-                else {
-                    enemies[i].hasTarget = false;
-                    if (sqrtf((enemies[i].patrolTarget.x - enemies[i].position.x) * (enemies[i].patrolTarget.x - enemies[i].position.x) +
-                        (enemies[i].patrolTarget.y - enemies[i].position.y) * (enemies[i].patrolTarget.y - enemies[i].position.y)) < 10) {
-                        enemies[i].patrolTarget = GetRandomPatrolTarget(enemies[i].position, ENEMY_PATROL_RADIUS);
-                        Vector2 dir = { enemies[i].patrolTarget.x - enemies[i].position.x, enemies[i].patrolTarget.y - enemies[i].position.y };
-                        float length = sqrtf(dir.x * dir.x + dir.y * dir.y);
-                        if (length != 0) {
-                            dir.x /= length;
-                            dir.y /= length;
-                        }
-                        enemies[i].velocity.x = dir.x * ENEMY_SPEED;
-                        enemies[i].velocity.y = dir.y * ENEMY_SPEED;
-                    }
-                }
-            }
-        }
 
         // Обработка столкновения между игроками и отталкивания
         {
@@ -587,27 +503,27 @@ int main(void) {
        // Пуля от первого игрока по второму
                 // Проверка столкновений пуль между игроками
 // Пуля от первого игрока по второму
-if (bullets[i].active && bullets[i].fromPlayer) {
-    Rectangle rectPlayer2 = { player2.x, player2.y, player2.width, player2.height };
-    if (CheckCollisionPointRec(bullets[i].position, rectPlayer2)) {
-        bullets[i].active = false;
-        int damage = (int)(bullets[i].damage * bullets[i].damageMultiplier);
-        playerLives2 -= damage;
-        printf("Пуля первого игрока попала во второго! Урон: %d, Жизни второго: %d\n", damage, playerLives2);
-    }
-}
-// Пуля от второго игрока по первому
-if (bullets[i].active && !bullets[i].fromPlayer) {
-    Rectangle rectPlayer1 = { player.x, player.y, player.width, player.height };
-    if (CheckCollisionPointRec(bullets[i].position, rectPlayer1)) {
-        bullets[i].active = false;
-        int damage = (int)(bullets[i].damage * bullets[i].damageMultiplier);
-        playerLives1 -= damage;
-        printf("Пуля второго игрока попала в первого! Урон: %d, Жизни первого: %d\n", damage, playerLives1);
-    }
-}
-            
-        
+                if (bullets[i].active && bullets[i].fromPlayer) {
+                    Rectangle rectPlayer2 = { player2.x, player2.y, player2.width, player2.height };
+                    if (CheckCollisionPointRec(bullets[i].position, rectPlayer2)) {
+                        bullets[i].active = false;
+                        int damage = (int)(bullets[i].damage * bullets[i].damageMultiplier);
+                        playerLives2 -= damage;
+                        printf("Пуля первого игрока попала во второго! Урон: %d, Жизни второго: %d\n", damage, playerLives2);
+                    }
+                }
+                // Пуля от второго игрока по первому
+                if (bullets[i].active && !bullets[i].fromPlayer) {
+                    Rectangle rectPlayer1 = { player.x, player.y, player.width, player.height };
+                    if (CheckCollisionPointRec(bullets[i].position, rectPlayer1)) {
+                        bullets[i].active = false;
+                        int damage = (int)(bullets[i].damage * bullets[i].damageMultiplier);
+                        playerLives1 -= damage;
+                        printf("Пуля второго игрока попала в первого! Урон: %d, Жизни первого: %d\n", damage, playerLives1);
+                    }
+                }
+
+
 
                 // Аналогично для каменных блоков
                 for (int s = 0; s < NUM_STONE_BLOCKS; s++) {
@@ -627,40 +543,7 @@ if (bullets[i].active && !bullets[i].fromPlayer) {
                         }
                     }
                 }
-                // столкновение с врагами
-                if (bullets[i].fromPlayer) {
-                    for (int j = 0; j < NUM_ENEMIES; j++) {
-                        if (enemies[j].active) {
-                            Rectangle enemyRect = { enemies[j].position.x, enemies[j].position.y, 50, 50 };
-                            if (CheckCollisionPointRec(bullets[i].position, enemyRect)) {
-                                enemies[j].active = false;
-                                bullets[i].active = false;
-                                enemiesKilled++;
-                                score += 100; // очки за врага
-                                break;
-                            }
-                        }
-                    }
-                }
-                else {
-                    // Враговые пули по игрокам
-                    Rectangle rectPlayer1 = { player.x, player.y, player.width, player.height };
-                    Rectangle rectPlayer2 = { player2.x, player2.y, player2.width, player2.height };
-                    if (CheckCollisionPointRec(bullets[i].position, rectPlayer1)) {
-                        printf("Пуля врага попала в первого игрока! Координаты пули: (%.2f, %.2f)\n", bullets[i].position.x, bullets[i].position.y);
-                        printf("До попадания: Жизни первого игрока: %d\n", playerLives1);
-                        bullets[i].active = false;
-                        playerLives1--;
-                        printf("После попадания: Жизни первого игрока: %d\n", playerLives1);
-                    }
-                    if (CheckCollisionPointRec(bullets[i].position, rectPlayer2)) {
-                        printf("Пуля врага попала во второго игрока! Координаты пули: (%.2f, %.2f)\n", bullets[i].position.x, bullets[i].position.y);
-                        printf("До попадания: Жизни второго игрока: %d\n", playerLives2);
-                        bullets[i].active = false;
-                        playerLives2--;
-                        printf("После попадания: Жизни второго игрока: %d\n", playerLives2);
-                    }
-                }
+
             }
         }
 
@@ -795,82 +678,45 @@ if (bullets[i].active && !bullets[i].fromPlayer) {
         if (player2.y + player2.height > mapHeight) { player2.y = mapHeight - player2.height; velocity2.y = -velocity2.y; }
 
         // --- Обновление врагов --- //
-        for (int i = 0; i < NUM_ENEMIES; i++) {
-            if (enemies[i].active) {
-                enemies[i].rotationAngle += enemies[i].rotationDirection * enemies[i].rotationSpeed * deltaTime;
-                if (enemies[i].rotationAngle > 360) enemies[i].rotationAngle -= 360;
-                if (enemies[i].rotationAngle < 0) enemies[i].rotationAngle += 360;
 
-                if (rand() % 1000 < 5) {
-                    enemies[i].rotationDirection *= -1;
-                }
-
-                Vector2 newPos = {
-                    enemies[i].position.x + enemies[i].velocity.x * deltaTime,
-                    enemies[i].position.y + enemies[i].velocity.y * deltaTime
-                };
-
-                if (newPos.x < 0 || newPos.x > mapWidth - 50) {
-                    enemies[i].velocity.x = -enemies[i].velocity.x;
-                }
-                else {
-                    enemies[i].position.x = newPos.x;
-                }
-                if (newPos.y < 0 || newPos.y > mapHeight - 50) {
-                    enemies[i].velocity.y = -enemies[i].velocity.y;
-                }
-                else {
-                    enemies[i].position.y = newPos.y;
-                }
-
-                Vector2 playerPos = { player.x + player.width / 2, player.y + player.height / 2 };
-                Vector2 toPlayer = { playerPos.x - enemies[i].position.x, playerPos.y - enemies[i].position.y };
-                float distToPlayer = sqrtf(toPlayer.x * toPlayer.x + toPlayer.y * toPlayer.y);
-
-                enemies[i].shootTimer -= deltaTime;
-
-                if (distToPlayer <= ENEMY_VIEW_RADIUS) {
-                    enemies[i].hasTarget = true;
-                    enemies[i].patrolTarget = playerPos;
-
-                    if (enemies[i].shootTimer <= 0) {
-                        Vector2 startPos = { enemies[i].position.x + 25, enemies[i].position.y + 25 };
-                        float angle = atan2f(toPlayer.y, toPlayer.x) * RAD2DEG;
-                        SpawnBullet(bullets, startPos, angle, 300.0f, false
-                            , 1, 10);
-                        enemies[i].shootTimer = 2.0f;
-                    }
-                }
-                else {
-                    enemies[i].hasTarget = false;
-                    if (sqrtf((enemies[i].patrolTarget.x - enemies[i].position.x) * (enemies[i].patrolTarget.x - enemies[i].position.x) +
-                        (enemies[i].patrolTarget.y - enemies[i].position.y) * (enemies[i].patrolTarget.y - enemies[i].position.y)) < 10) {
-                        enemies[i].patrolTarget = GetRandomPatrolTarget(enemies[i].position, ENEMY_PATROL_RADIUS);
-                        Vector2 dir = { enemies[i].patrolTarget.x - enemies[i].position.x, enemies[i].patrolTarget.y - enemies[i].position.y };
-                        float length = sqrtf(dir.x * dir.x + dir.y * dir.y);
-                        if (length != 0) {
-                            dir.x /= length;
-                            dir.y /= length;
-                        }
-                        enemies[i].velocity.x = dir.x * ENEMY_SPEED;
-                        enemies[i].velocity.y = dir.y * ENEMY_SPEED;
-                    }
-                }
-            }
-        }
 
         // --- Столкновение между игроками и блоками уже обработано выше, импульс только для первого --- //
-
-        // --- Обработка пуль --- //
         for (int i = 0; i < MAX_BULLETS; i++) {
             if (bullets[i].active) {
+                Vector2 prevPos = bullets[i].position; // запоминаем старую позицию
+
+                // Обновляем позицию
                 bullets[i].position.x += bullets[i].velocity.x * deltaTime;
                 bullets[i].position.y += bullets[i].velocity.y * deltaTime;
+
+                // Проверяем выход за границы
                 if (bullets[i].position.x < 0 || bullets[i].position.x > mapWidth ||
                     bullets[i].position.y < 0 || bullets[i].position.y > mapHeight) {
                     bullets[i].active = false;
+                    continue;
                 }
 
+                // Проверка попадания по первому игроку
+                Rectangle rectPlayer1 = { player.x, player.y, player.width, player.height };
+                if (CheckLineRectIntersection(prevPos, bullets[i].position, rectPlayer1)) {
+                    if (!bullets[i].fromPlayer) { // не от этого же игрока
+                        bullets[i].active = false;
+                        int damage = (int)(bullets[i].damage * bullets[i].damageMultiplier);
+                        playerLives1 -= damage;
+                        printf("Пуля второго игрока попала в первого! Урон: %d, Жизни: %d\n", damage, playerLives1);
+                    }
+                }
+
+                // Проверка попадания по второму игроку
+                Rectangle rectPlayer2 = { player2.x, player2.y, player2.width, player2.height };
+                if (CheckLineRectIntersection(prevPos, bullets[i].position, rectPlayer2)) {
+                    if (bullets[i].fromPlayer) { // пуля от второго игрока
+                        bullets[i].active = false;
+                        int damage = (int)(bullets[i].damage * bullets[i].damageMultiplier);
+                        playerLives2 -= damage;
+                        printf("Пуля второго игрока попала в второго! Урон: %d, Жизни: %d\n", damage, playerLives2);
+                    }
+                }
                 // Столкновения с кирпичами
                 for (int b = 0; b < NUM_BRICK_BLOCKS; b++) {
                     if (brickBlocks[b].active) {
@@ -901,29 +747,11 @@ if (bullets[i].active && !bullets[i].fromPlayer) {
                                 }
                             }
                             break;
+
                         }
                     }
                 }
 
-                // Проверка попаданий пуль в другого игрока
-        // Пуля от первого игрока по второму
-                if (bullets[i].active && bullets[i].fromPlayer) {
-                    Rectangle rectPlayer2 = { player2.x, player2.y, player2.width, player2.height };
-                    if (CheckCollisionPointRec(bullets[i].position, rectPlayer2)) {
-                        bullets[i].active = false;
-                        playerLives2--;
-                        printf("Пуля первого игрока попала во второго! Жизни второго: %d\n", playerLives2);
-                    }
-                }
-                // Пуля от второго игрока по первому
-                if (bullets[i].active && !bullets[i].fromPlayer) {
-                    Rectangle rectPlayer1 = { player.x, player.y, player.width, player.height };
-                    if (CheckCollisionPointRec(bullets[i].position, rectPlayer1)) {
-                        bullets[i].active = false;
-                        playerLives1--;
-                        printf("Пуля второго игрока попала в первого! Жизни первого: %d\n", playerLives1);
-                    }
-                }
 
                 for (int s = 0; s < NUM_STONE_BLOCKS; s++) {
                     if (stoneBlocks[s].active) {
@@ -998,46 +826,7 @@ if (bullets[i].active && !bullets[i].fromPlayer) {
                 playerHitEnemy1 = false;
                 player2HitEnemy1 = false;
 
-                // столкновение с врагами
-                if (bullets[i].fromPlayer) {
-                    for (int j = 0; j < NUM_ENEMIES; j++) {
-                        if (enemies[j].active) {
-                            Rectangle enemyRect = { enemies[j].position.x, enemies[j].position.y, 50, 50 };
-                            if (CheckCollisionPointRec(bullets[i].position, enemyRect)) {
-                                enemies[j].active = false;
-                                bullets[i].active = false;
-                                enemiesKilled++;
-                                score += 100;
-                                break;
-                            }
-                        }
-                    }
-                }
-                else {
-                    // Враговые пули по игрокам
-                    Rectangle rectPlayer1 = { player.x, player.y, player.width, player.height };
-                    Rectangle rectPlayer2 = { player2.x, player2.y, player2.width, player2.height };
-                    // В обработке попаданий по игрокам
-                    if (CheckCollisionPointRec(bullets[i].position, rectPlayer1)) {
-                        printf("Пуля врага попала в первого игрока! Координаты пули: (%.2f, %.2f)\n", bullets[i].position.x, bullets[i].position.y);
-                        printf("До попадания: Жизни первого игрока: %d\n", playerLives1);
-                        bullets[i].active = false;
-                        playerLives1--;
-                        // Эффект замедления
-                        slowEffectTimer = 3.0f; // например, 3 секунды замедления
-                        // Замедляем перезарядку
-                        reloadDuration = 5.0f; // например, увеличиваем на время замедления
-                    }
-                    if (CheckCollisionPointRec(bullets[i].position, rectPlayer2)) {
-                        printf("Пуля врага попала во второго игрока! Координаты пули: (%.2f, %.2f)\n", bullets[i].position.x, bullets[i].position.y);
-                        printf("До попадания: Жизни второго игрока: %d\n", playerLives2);
-                        bullets[i].active = false;
-                        playerLives2--;
-                        slowEffectTimer = 3.0f; // например, 3 секунды замедления
-                        // Замедляем перезарядку
-                        reloadDuration = 5.0f; // например, увеличиваем на время замедления
-                    }
-                }
+
             }
         }
 
@@ -1167,10 +956,7 @@ if (bullets[i].active && !bullets[i].fromPlayer) {
 
                 DrawTextureEx(
                     textureToDraw,
-                    Vector2{
-                        bullets[i].position.x - textureToDraw.width / 10,
-                        bullets[i].position.y - textureToDraw.height / 10
-                    },
+                    bullets[i].position,
                     bulletAngle,
                     scale,
                     WHITE
@@ -1178,15 +964,44 @@ if (bullets[i].active && !bullets[i].fromPlayer) {
             }
         }
 
-        for (int i = 0; i < NUM_ENEMIES; i++) {
-            if (enemies[i].active) {
-                Rectangle destRec = { enemies[i].position.x, enemies[i].position.y, 50, 50 };
-                Vector2 origin = { 25, 25 }; // центр
-                DrawTexturePro(enemyTexture, Rectangle{ 0, 0, (float)enemyTexture.width, (float)enemyTexture.height }, destRec, origin, enemies[i].rotationAngle, WHITE);
+
+        //EndMode2D();
+        // Отрисовка границ первого игрока
+        DrawRectangleLines(
+            (int)player.x,
+            (int)player.y,
+            (int)player.width,
+            (int)player.height,
+            RED
+        );
+        // Отрисовка границ пуль
+        for (int i = 0; i < MAX_BULLETS; i++) {
+            if (bullets[i].active) {
+                // Размер границы
+                float borderSize = 10.0f; // Можно изменить размер по желанию
+                Rectangle borderRect = {
+                    bullets[i].position.x - borderSize / 2,
+                    bullets[i].position.y - borderSize / 2,
+                    borderSize,
+                    borderSize
+                };
+                DrawRectangleLines(
+                    (int)borderRect.x,
+                    (int)borderRect.y,
+                    (int)borderRect.width,
+                    (int)borderRect.height,
+                    GREEN // Цвет границы
+                );
             }
         }
-        //EndMode2D();
-
+        // Отрисовка границ второго игрока
+        DrawRectangleLines(
+            (int)player2.x,
+            (int)player2.y,
+            (int)player2.width,
+            (int)player2.height,
+            RED
+        );
         // Отображение жизней каждого игрока
         DrawText(TextFormat("Player 1 Lives: %d", playerLives1), 10, 200, 20, WHITE);
         DrawText(TextFormat("Player 2 Lives: %d", playerLives2), 10, 230, 20, WHITE);
