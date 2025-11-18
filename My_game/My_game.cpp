@@ -3,6 +3,15 @@
 #include <stdlib.h>
 #include <time.h>
 #include <stdio.h>
+int bulletsFiredInSeries = 0;
+float seriesFireTimer = 0.0f;
+bool isSeriesRunning = false;
+float seriesCooldownTimer = 0.0f;
+float reloadDurationActive1 = 0.0f;
+float reloadDurationActive2 = 0.0f;
+
+
+
 Color LerpColor(Color start, Color end, float t) {
     return {
         (unsigned char)(start.r + (end.r - start.r) * t),
@@ -11,6 +20,8 @@ Color LerpColor(Color start, Color end, float t) {
         (unsigned char)(start.a + (end.a - start.a) * t)
     };
 }
+
+
 bool CheckLineRectIntersection(Vector2 start, Vector2 end, Rectangle rec) {
     // Координаты вершин прямоугольника
     Vector2 rectPoints[4] = {
@@ -48,6 +59,8 @@ bool CheckLineRectIntersection(Vector2 start, Vector2 end, Rectangle rec) {
     }
     return false; // пересечения нет
 }
+
+
 #define MAX_BULLETS 100
 #define NUM_BRICK_BLOCKS 9
 #define NUM_STONE_BLOCKS 4
@@ -70,6 +83,12 @@ int score = 0; // счетчик очков
 float reloadTimer1 = 0.0f; // таймер перезарядки для первого игрока
 float reloadTimer2 = 0.0f; // таймер перезарядки для второго игрока
 float reloadDuration = 2.5f; // длительность перезарядки
+float reloadDurationTripleShot = 8.0f; // перезарядка нового танка
+float tripleShotBulletSpeed = 600.0f; // скорость пуль для нового танка
+int maxTripleShotBullets = 3; // кол-во пуль в серии
+int initialTankType = 1; // по умолчанию
+int currentTankType = initialTankType;
+
 typedef struct {
     Vector2 position;
     Vector2 size;
@@ -270,7 +289,30 @@ int main(void) {
         enemies[i].rotationSpeed = 60 + rand() % 60; // 60-120 deg/sec
         enemies[i].rotationDirection = (rand() % 2) * 2 - 1; // 1 или -1
     }
+    // Меню выбора типа танка
+    while (true) {
+        BeginDrawing();
+        ClearBackground(RAYWHITE);
+        DrawText("Choose Tank Type:", screenWidth / 2 - 80, screenHeight / 2 - 80, 20, DARKGRAY);
+        DrawText("1 - Standard (single shot, 2.5s)", screenWidth / 2 - 150, screenHeight / 2 - 50, 20, DARKGRAY);
+        DrawText("2 - Rapid Fire (fast, 2.5s)", screenWidth / 2 - 150, screenHeight / 2 - 20, 20, DARKGRAY);
+        DrawText("3 - Triple Shot (3 bullets, 8s)", screenWidth / 2 - 150, screenHeight / 2 + 10, 20, DARKGRAY);
+        DrawText("Press 1, 2, or 3 to select", screenWidth / 2 - 130, screenHeight / 2 + 50, 20, DARKGRAY);
+        EndDrawing();
 
+        if (IsKeyPressed(KEY_ONE)) {
+            currentTankType = 1;
+            break;
+        }
+        if (IsKeyPressed(KEY_TWO)) {
+            currentTankType = 2;
+            break;
+        }
+        if (IsKeyPressed(KEY_THREE)) {
+            currentTankType = 3;
+            break;
+        }
+    }
     while (!WindowShouldClose()) {
         // В начале цикла, перед обработкой ввода
         bool isBulletActive = false;
@@ -293,6 +335,25 @@ int main(void) {
         bool playerHitEnemy1 = false;
         bool player2HitEnemy1 = false;
         float deltaTime = GetFrameTime();
+        if (IsKeyDown(KEY_ENTER) && !isSeriesRunning && seriesCooldownTimer <= 0.0f && reloadTimer1 == 0.0f) {
+            if (currentTankType == 3) {
+                // запуск серии
+                bulletsFiredInSeries = 0;
+                seriesFireTimer = 0.0f;
+                isSeriesRunning = true;
+                // Устанавливаем таймер только один раз
+                reloadTimer1 = reloadDuration;
+                reloadDurationActive1 = reloadTimer1;
+            }
+            else {
+                // одиночный выстрел
+                Vector2 startPos = { player.x, player.y };
+                float angleDeg = rotation;
+                SpawnBullet(bullets, startPos, angleDeg, 600.0f, true, 1.0f, 10);
+                reloadTimer1 = (currentAmmoType == 1) ? reloadDurationFast : reloadDurationSlow;
+                reloadDurationActive1 = reloadTimer1;
+            }
+        }
         // В начале цикла
         if (slowEffectTimer > 0.0f) {
             slowEffectTimer -= deltaTime;
@@ -320,13 +381,22 @@ int main(void) {
         // Обработка стрельбы для первого игрока
         // В начале основного цикла (внутри while), для стрельбы
         // Для первого игрока
-        if (IsKeyDown(KEY_ENTER) && reloadTimer1 == 0.0f) {
-            Vector2 startPos = { player.x, player.y }; // верхний левый угол первого игрока
-            float angleDeg = rotation; // например, вправо
-            SpawnBullet(bullets, startPos, angleDeg, 600.0f, true, 1.0f, 10);
-            reloadTimer1 = (currentAmmoType == 1) ? reloadDurationFast : reloadDurationSlow;
-        }
 
+        float currentReloadDuration = 2.5f; // по умолчанию
+        int bulletsPerShot = 1; // по умолчанию
+
+        if (currentTankType == 1) {
+            currentReloadDuration = reloadDurationFast; // 2.5 сек
+            bulletsPerShot = 1;
+        }
+        else if (currentTankType == 2) {
+            currentReloadDuration = reloadDurationFast; // тоже 2.5 сек
+            bulletsPerShot = 1;
+        }
+        else if (currentTankType == 3) {
+            currentReloadDuration = reloadDurationTripleShot; // 8 сек
+            bulletsPerShot = maxTripleShotBullets; // 3 пули подряд
+        }
         // Для второго игрока
         if (IsKeyDown(KEY_RIGHT_SHIFT) && reloadTimer2 == 0.0f) {
             Vector2 startPos = { player2.x, player2.y }; // верхний левый угол второго игрока
@@ -334,6 +404,8 @@ int main(void) {
             SpawnBullet(bullets, startPos, angleDeg, 600.0f, true, 1.0f, 10);
             reloadTimer2 = (currentAmmoType == 1) ? reloadDurationFast : reloadDurationSlow;
         }
+        // при выстреле (например, при нажатии ENTER для серии)
+
         // Управление первым игроком
         bool rotateLeft = IsKeyDown(KEY_A);
         bool rotateRight = IsKeyDown(KEY_D);
@@ -416,6 +488,33 @@ int main(void) {
         player2.y += velocity2.y * deltaTime;
 
 
+        // Обработка серии выстрелов, если выбран тип 3
+        // Обработка серии из 7 пуль
+        // Обработка серии из 7 пуль
+
+        if (currentTankType == 3 && isSeriesRunning) {
+            if (bulletsFiredInSeries < 7) {
+                if (seriesFireTimer > 0) {
+                    seriesFireTimer -= deltaTime;
+                }
+                else {
+                    // Выстрелить пулю
+                    Vector2 startPos = { player.x, player.y };
+                    float angleDeg = rotation;
+                    SpawnBullet(bullets, startPos, angleDeg, tripleShotBulletSpeed, true, 1.0f, 10);
+                    bulletsFiredInSeries++;
+                    seriesFireTimer = 0.2f; // задержка между пулями
+                }
+            }
+            else {
+                // Серия закончена
+                isSeriesRunning = false; // отключаем серию
+                seriesCooldownTimer = 8.0f; // запускаем перезарядку
+            }
+        }
+        if (seriesCooldownTimer > 0) {
+            seriesCooldownTimer -= deltaTime;
+        }
 
         // Ограничения границ для первого
         if (player.x < 0) { player.x = 0; velocity.x = -velocity.x; }
@@ -850,21 +949,24 @@ int main(void) {
         // В цикле рендеринга
         // Для первого игрока
         if (reloadTimer1 > 0.0f) {
-            float t = 1.0f - (reloadTimer1 / reloadDuration); // прогресс от 0 до 1
+            reloadTimer1 -= deltaTime;
+            if (reloadTimer1 < 0.0f) reloadTimer1 = 0.0f;
+        }
+        if (reloadDurationActive1 > 0.0f) {
+            // прогресс перезарядки
+            float progress = (reloadDurationActive1 - reloadTimer1) / reloadDurationActive1;
+            // рисуем прогресс
             Color color;
-            if (t < 0.33f) {
-                // от красного к оранжевому
-                float localT = t / 0.33f; // 0..1
+            if (progress < 0.33f) {
+                float localT = progress / 0.33f;
                 color = LerpColor(RED, ORANGE, localT);
             }
-            else if (t < 0.66f) {
-                // от оранжевого к желтому
-                float localT = (t - 0.33f) / 0.33f;
+            else if (progress < 0.66f) {
+                float localT = (progress - 0.33f) / 0.33f;
                 color = LerpColor(ORANGE, YELLOW, localT);
             }
             else {
-                // от желтого к зеленому
-                float localT = (t - 0.66f) / 0.34f; // чуть больше
+                float localT = (progress - 0.66f) / 0.34f;
                 color = LerpColor(YELLOW, GREEN, localT);
             }
             DrawText(TextFormat("Player 1 Reload: %.1f", reloadTimer1), 10, 290, 20, color);
@@ -1038,4 +1140,4 @@ int main(void) {
     EndDrawing();
 
     return 0;
-}
+} 
