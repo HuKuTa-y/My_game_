@@ -89,6 +89,19 @@ int maxTripleShotBullets = 3; // кол-во пуль в серии
 int initialTankType = 1; // по умолчанию
 int currentTankType = initialTankType;
 
+// Определим структуру для хранения параметров танка
+typedef struct {
+    float moveSpeed;      // скорость езды
+    float bulletSpeed;    // скорость пуль
+} TankTypeParams;
+
+// Создадим массив с параметрами для каждого типа
+TankTypeParams tankParams[3] = {
+    { 2000.0f, 2000.0f }, // Тип 1: стандартный
+    { 800.0f, 600.0f }, // Тип 2: быстрый
+    { 150.0f, 600.0f }  // Тип 3: тройной (можно изменить)
+};
+
 typedef struct {
     Vector2 position;
     Vector2 size;
@@ -120,10 +133,10 @@ typedef struct {
     Vector2 velocity;
     bool active;
     bool fromPlayer;
-    int damage;           // урон
-    float damageMultiplier; // множитель урона
+    int damage;
+    float damageMultiplier;
+    int type; // 1 - обычная, 2 - усиленная
 } Bullet;
-
 
 typedef enum {
     BLOCK_TYPE_NORMAL,
@@ -163,7 +176,7 @@ typedef struct {
     int rotationDirection;    // направление вращения (1 или -1)
 } EnemyExt;
 
-void SpawnBullet(Bullet bullets[], Vector2 startPos, float angleDeg, float bulletSpeed, bool fromPlayer, float damageMultiplier, int damage) {
+void SpawnBullet(Bullet bullets[], Vector2 startPos, float angleDeg, float bulletSpeed, bool fromPlayer, float damageMultiplier, int damage, int type) {
     for (int i = 0; i < MAX_BULLETS; i++) {
         if (!bullets[i].active) {
             bullets[i].active = true;
@@ -172,9 +185,9 @@ void SpawnBullet(Bullet bullets[], Vector2 startPos, float angleDeg, float bulle
             bullets[i].velocity.x = cosf(angleRad) * bulletSpeed;
             bullets[i].velocity.y = sinf(angleRad) * bulletSpeed;
             bullets[i].fromPlayer = fromPlayer;
-            // Можно добавить свойство damage и damageMultiplier, если нужно
-            // Например, через расширенную структуру Bullet
-            // Но для этого потребуется изменить структуру Bullet
+            bullets[i].damage = damage;
+            bullets[i].damageMultiplier = damageMultiplier;
+            bullets[i].type = type; // запишем тип
             break;
         }
     }
@@ -187,6 +200,10 @@ Vector2 GetRandomPatrolTarget(Vector2 currentPos, float radius) {
 
 int main(void) {
 
+    float currentTankMoveSpeed = tankParams[currentTankType - 1].moveSpeed;
+    float currentBulletSpeed = tankParams[currentTankType - 1].bulletSpeed;
+    float bulletSpeedType1 = 600.0f;
+    float bulletSpeedType2 = 300.0f;
     float rotation = 0.0f;
     float rotation2 = 0.0f; // вращение второго игрока
     int playerLives1 = 20; // жизни первого игрока
@@ -292,7 +309,7 @@ int main(void) {
     // Меню выбора типа танка
     while (true) {
         BeginDrawing();
-        ClearBackground(RAYWHITE);
+        ClearBackground(RAYWHITE);  
         DrawText("Choose Tank Type:", screenWidth / 2 - 80, screenHeight / 2 - 80, 20, DARKGRAY);
         DrawText("1 - Standard (single shot, 2.5s)", screenWidth / 2 - 150, screenHeight / 2 - 50, 20, DARKGRAY);
         DrawText("2 - Rapid Fire (fast, 2.5s)", screenWidth / 2 - 150, screenHeight / 2 - 20, 20, DARKGRAY);
@@ -349,7 +366,10 @@ int main(void) {
                 // одиночный выстрел
                 Vector2 startPos = { player.x, player.y };
                 float angleDeg = rotation;
-                SpawnBullet(bullets, startPos, angleDeg, 600.0f, true, 1.0f, 10);
+                float currentBulletSpeed = (currentAmmoType == 2) ? bulletSpeedType2 : bulletSpeedType1;
+                int damage = (currentAmmoType == 2) ? 3 : 1; // урон для обычных и усиленных
+                int bulletType = (currentAmmoType == 2) ? 2 : 1; // тип пули
+                SpawnBullet(bullets, startPos, angleDeg, currentBulletSpeed, true, 1.0f, damage, bulletType);
                 reloadTimer1 = (currentAmmoType == 1) ? reloadDurationFast : reloadDurationSlow;
                 reloadDurationActive1 = reloadTimer1;
             }
@@ -401,7 +421,10 @@ int main(void) {
         if (IsKeyDown(KEY_RIGHT_SHIFT) && reloadTimer2 == 0.0f) {
             Vector2 startPos = { player2.x, player2.y }; // верхний левый угол второго игрока
             float angleDeg = rotation2; // тоже вправо
-            SpawnBullet(bullets, startPos, angleDeg, 600.0f, true, 1.0f, 10);
+            int damage = (currentAmmoType == 2) ? 3 : 1; // урон для обычных и усиленных
+            int bulletType = (currentAmmoType == 2) ? 2 : 1; // тип пули
+            float currentBulletSpeed = (currentAmmoType == 2) ? bulletSpeedType2 : bulletSpeedType1;
+            SpawnBullet(bullets, startPos, angleDeg, currentBulletSpeed, true, 1.0f, damage, bulletType);
             reloadTimer2 = (currentAmmoType == 1) ? reloadDurationFast : reloadDurationSlow;
         }
         // при выстреле (например, при нажатии ENTER для серии)
@@ -446,17 +469,18 @@ int main(void) {
             velocity2.x -= dirX * acceleration * deltaTime;
             velocity2.y -= dirY * acceleration * deltaTime;
         }
+        // Движение первого игрока
         if (moveForward) {
-            float dirX = cosf(radians);
-            float dirY = sinf(radians);
-            velocity.x += dirX * acceleration * deltaTime;
-            velocity.y += dirY * acceleration * deltaTime;
+            float dirX = cosf(DEG2RAD * rotation);
+            float dirY = sinf(DEG2RAD * rotation);
+            velocity.x += dirX * currentTankMoveSpeed * deltaTime;
+            velocity.y += dirY * currentTankMoveSpeed * deltaTime;
         }
         if (moveBackward) {
-            float dirX = cosf(radians);
-            float dirY = sinf(radians);
-            velocity.x -= dirX * acceleration * deltaTime;
-            velocity.y -= dirY * acceleration * deltaTime;
+            float dirX = cosf(DEG2RAD * rotation);
+            float dirY = sinf(DEG2RAD * rotation);
+            velocity.x -= dirX * currentTankMoveSpeed * deltaTime;
+            velocity.y -= dirY * currentTankMoveSpeed * deltaTime;
         }
 
         // Ограничение скорости
@@ -500,8 +524,12 @@ int main(void) {
                 else {
                     // Выстрелить пулю
                     Vector2 startPos = { player.x, player.y };
-                    float angleDeg = rotation;
-                    SpawnBullet(bullets, startPos, angleDeg, tripleShotBulletSpeed, true, 1.0f, 10);
+                   
+                    float angleDeg = rotation;                   
+                    float currentBulletSpeed = (currentAmmoType == 2) ? bulletSpeedType2 : bulletSpeedType1;
+                    int damage = (currentAmmoType == 2) ? 3 : 1; // урон для обычных и усиленных
+                    int bulletType = (currentAmmoType == 2) ? 2 : 1; // тип пули
+                    SpawnBullet(bullets, startPos, angleDeg, currentBulletSpeed, true, 1.0f, damage, bulletType);
                     bulletsFiredInSeries++;
                     seriesFireTimer = 0.2f; // задержка между пулями
                 }
@@ -565,12 +593,18 @@ int main(void) {
                     bullets[i].active = false;
                 }
                 // столкновения с кирпичами и камнями
+
                 for (int b = 0; b < NUM_BRICK_BLOCKS; b++) {
                     if (brickBlocks[b].active) {
                         Rectangle rect = { brickBlocks[b].position.x, brickBlocks[b].position.y, brickBlocks[b].size.x, brickBlocks[b].size.y };
                         if (CheckCollisionPointRec(bullets[i].position, rect)) {
                             bullets[i].active = false;
                             brickBlocks[b].active = false;
+                            // Размер текстуры
+                            
+
+                            // Масштаб при отрисовке
+                            float scaleFactor = 0.8f; // например, как у вас
                             // Импульс только если пуля от игрока
                             if (bullets[i].fromPlayer) {
                                 Vector2 blockCenter = { brickBlocks[b].position.x + brickBlocks[b].size.x / 2,
@@ -602,26 +636,40 @@ int main(void) {
        // Пуля от первого игрока по второму
                 // Проверка столкновений пуль между игроками
 // Пуля от первого игрока по второму
-                if (bullets[i].active && bullets[i].fromPlayer) {
+                if (bullets[i].active && !bullets[i].fromPlayer) {
                     Rectangle rectPlayer2 = { player2.x, player2.y, player2.width, player2.height };
                     if (CheckCollisionPointRec(bullets[i].position, rectPlayer2)) {
                         bullets[i].active = false;
                         int damage = (int)(bullets[i].damage * bullets[i].damageMultiplier);
                         playerLives2 -= damage;
-                        printf("Пуля первого игрока попала во второго! Урон: %d, Жизни второго: %d\n", damage, playerLives2);
+                        printf("Пуля второго типа попала во второго! Урон: %d, Жизни: %d\n", damage, playerLives2);
+                        // добавляем отталкивание, если пуля типа 2
+                        if (bullets[i].type == 2) {
+                            // Расчет направления от пули к жертве
+                            Vector2 victimCenter = { player2.x + player2.width / 2, player2.y + player2.height / 2 };
+                            Vector2 bulletPos = bullets[i].position;
+                            Vector2 pushDir = { victimCenter.x - bulletPos.x, victimCenter.y - bulletPos.y };
+                            float length = sqrtf(pushDir.x * pushDir.x + pushDir.y * pushDir.y);
+                            if (length != 0) {
+                                float pushStrength = 20.0f; // сила отталкивания, подбирайте по ощущениям
+                                // смещаем жертву
+                                player2.x += (pushDir.x / length) * pushStrength;
+                                player2.y += (pushDir.y / length) * pushStrength;
+                            }
+                        }
                     }
                 }
                 // Пуля от второго игрока по первому
-                if (bullets[i].active && !bullets[i].fromPlayer) {
+                if (bullets[i].active && bullets[i].fromPlayer) {
                     Rectangle rectPlayer1 = { player.x, player.y, player.width, player.height };
                     if (CheckCollisionPointRec(bullets[i].position, rectPlayer1)) {
                         bullets[i].active = false;
                         int damage = (int)(bullets[i].damage * bullets[i].damageMultiplier);
                         playerLives1 -= damage;
-                        printf("Пуля второго игрока попала в первого! Урон: %d, Жизни первого: %d\n", damage, playerLives1);
+                        printf("Пуля от второго игрока попала в первого! Урон: %d, Жизни: %d\n", damage, playerLives1);
+                        // добавляем отталкивание, если нужно
                     }
                 }
-
 
 
                 // Аналогично для каменных блоков
@@ -1006,17 +1054,25 @@ int main(void) {
 
         // Отрисовка кирпичных блоков с уменьшенными размерами
         // Размеры текстуры кирпича
-        float scaleFactor = 0.08f; // например, уменьшить вдвое
+        // Размер текстуры кирпича
+        float brickTextureWidth = (float)bricks.width;
+        float brickTextureHeight = (float)bricks.height;
+
+        // Отрисовка кирпичных блоков с текстурой точно по размерам блока
+// Для кирпичей
+        float texWidth = (float)bricks.width;
+        float texHeight = (float)bricks.height;
+
         for (int b = 0; b < NUM_BRICK_BLOCKS; b++) {
             if (brickBlocks[b].active) {
-                Rectangle sourceRec = { 0, 0, (float)bricks.width, (float)bricks.height };
+                Rectangle sourceRec = { 0, 0, texWidth, texHeight };
                 Rectangle destRec = {
                     brickBlocks[b].position.x,
                     brickBlocks[b].position.y,
-                    bricks.width * scaleFactor,
-                    bricks.height * scaleFactor
+                    brickBlocks[b].size.x,
+                    brickBlocks[b].size.y
                 };
-                Vector2 origin = { (float)(bricks.width * scaleFactor) / 2, (float)(bricks.height * scaleFactor) / 2 };
+                Vector2 origin = {0,0};
                 DrawTexturePro(bricks, sourceRec, destRec, origin, 0.0f, WHITE);
             }
         }
@@ -1028,10 +1084,10 @@ int main(void) {
                 int stoneSize = (int)stoneBlocks[s].size.x;
                 Rectangle sourceRec = { 0, 0, (float)stoneTexture.width, (float)stoneTexture.height };
                 Rectangle destRec = {
-                    stoneBlocks[s].position.x - 25,
-                    stoneBlocks[s].position.y - 25,
-                    (float)stoneSize * stoneScale,
-                    (float)stoneSize * stoneScale
+                    stoneBlocks[s].position.x,
+                    stoneBlocks[s].position.y,
+                    stoneBlocks[s].size.x,
+                    stoneBlocks[s].size.y
                 };
                 Vector2 origin = { 0, 0 };
                 DrawTexturePro(stoneTexture, sourceRec, destRec, origin, 0.0f, WHITE);
@@ -1066,6 +1122,40 @@ int main(void) {
             }
         }
 
+        // Отрисовка границ кирпичных блоков
+        for (int b = 0; b < NUM_BRICK_BLOCKS; b++) {
+            if (brickBlocks[b].active) {
+                float brickTextureWidth = (float)bricks.width;
+                float brickTextureHeight = (float)bricks.height;
+
+                // Размер блока
+                float brickSizeX = brickBlocks[b].size.x;
+                float brickSizeY = brickBlocks[b].size.y;
+
+                // Масштаб при отрисовке
+                float scaleFactor = 0.08f; // например, как у вас
+                // Отрисовка границ по реальному размеру блока
+                Rectangle rect = { brickBlocks[b].position.x, brickBlocks[b].position.y, brickSizeX, brickSizeY };
+                DrawRectangleLines((int)rect.x, (int)rect.y, (int)rect.width, (int)rect.height, RED);
+            }
+        }
+
+        // Отрисовка границ каменных блоков
+        for (int s = 0; s < NUM_STONE_BLOCKS; s++) {
+            if (stoneBlocks[s].active) {
+                Rectangle rect = { stoneBlocks[s].position.x, stoneBlocks[s].position.y, stoneBlocks[s].size.x, stoneBlocks[s].size.y };
+                DrawRectangleLines((int)rect.x, (int)rect.y, (int)rect.width, (int)rect.height, BLUE);
+            }
+        }
+
+        // Отрисовка границ кустов
+        for (int i = 0; i < NUM_BUSHES; i++) {
+            if (bushes[i].active) {
+                Rectangle rect = { bushes[i].position.x, bushes[i].position.y, bushes[i].size.x, bushes[i].size.y };
+                DrawRectangleLines((int)rect.x, (int)rect.y, (int)rect.width, (int)rect.height, GREEN);
+            }
+        }
+    Итог:
 
         //EndMode2D();
         // Отрисовка границ первого игрока
